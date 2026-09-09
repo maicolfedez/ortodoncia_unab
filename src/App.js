@@ -189,9 +189,12 @@ export default function OrtodonciaApp() {
   const [activeTab, setActiveTab] = useState('bolton'); // 'bolton' | 'vert' | 'tollaro'
 
   
-  // Helper robusto para convertir los textos a números, evitando crasheos o NaN
+  // Helper ultra-robusto para convertir textos a números (soporta coma decimal, espacios y evita NaN/crashes)
   const getNum = (val) => {
-    const num = Number(val);
+    if (val === null || val === undefined) return 0;
+    const str = String(val).trim().replace(',', '.');
+    if (str === '' || str === '-') return 0;
+    const num = parseFloat(str);
     return isNaN(num) ? 0 : num;
   };
 
@@ -211,13 +214,16 @@ export default function OrtodonciaApp() {
                      getNum(mandibula[31]) + getNum(mandibula[32]) + getNum(mandibula[33]);
 
     // Cálculos Bolton
-    const boltonAnterior = sum6Max > 0 ? (sum6Mand / sum6Max) * 100 : 0;
-    const boltonTotal = sum12Max > 0 ? (sum12Mand / sum12Max) * 100 : 0;
+    const boltonAnteriorVal = sum6Max > 0 ? (sum6Mand / sum6Max) * 100 : 0;
+    const boltonTotalVal = sum12Max > 0 ? (sum12Mand / sum12Max) * 100 : 0;
+
+    const boltonAnterior = isNaN(boltonAnteriorVal) ? "0.0" : boltonAnteriorVal.toFixed(1);
+    const boltonTotal = isNaN(boltonTotalVal) ? "0.0" : boltonTotalVal.toFixed(1);
 
     // Diagnósticos Bolton
-    const difAnt = boltonAnterior - 77.2;
+    const difAnt = boltonAnteriorVal - 77.2;
     const diagAnt = difAnt > 0 ? 'Aumentado: Exceso inferior' : 'Disminuido: Exceso superior';
-    const difTot = boltonTotal - 91.2;
+    const difTot = boltonTotalVal - 91.2;
     const diagTot = difTot > 0 ? 'Aumentado: Exceso inferior' : 'Disminuido: Exceso superior';
 
     // Tanaka - Johnston (Suma de los 4 incisivos inferiores)
@@ -227,9 +233,11 @@ export default function OrtodonciaApp() {
 
     return {
       sum12Max, sum12Mand, sum6Max, sum6Mand,
-      boltonAnterior: boltonAnterior.toFixed(1), boltonTotal: boltonTotal.toFixed(1),
+      boltonAnterior, boltonTotal,
       diagAnt, diagTot,
-      sii, tanakaSup, tanakaInf
+      sii, 
+      tanakaSup: isNaN(tanakaSup) ? "0.0" : tanakaSup.toFixed(1), 
+      tanakaInf: isNaN(tanakaInf) ? "0.0" : tanakaInf.toFixed(1)
     };
   }, [maxilar, mandibula]);
 
@@ -242,7 +250,7 @@ export default function OrtodonciaApp() {
 
     const normas = {
       ejeFacial: { base: 90, varAnual: 0, ds: 3, reverseSign: false },
-      profunFacial: { base: 87, varAnual: 0.3333, ds: 3, reverseSign: false },
+      profunFacial: { base: 87, varAnual: 0.3333333333, ds: 3, reverseSign: false },
       anguloPM: { base: 26, varAnual: -0.3, ds: 4, reverseSign: true }, 
       altFacialInf: { base: 47, varAnual: 0, ds: 4, reverseSign: true }, 
       arcoMandibular: { base: 26, varAnual: 0.5, ds: 4, reverseSign: false }
@@ -260,15 +268,19 @@ export default function OrtodonciaApp() {
         ? (normaEdad - valPcte) / normas[v].ds 
         : (valPcte - normaEdad) / normas[v].ds;
 
+      if (isNaN(desvio)) desvio = 0;
+
       detalles[v] = { normaEdad, ds: normas[v].ds, valorSigno: desvio };
       vertSum += desvio;
     });
 
-    const vertTotal = (vertSum / 5).toFixed(2);
+    const vertTotalVal = vertSum / 5;
+    const vertTotal = isNaN(vertTotalVal) ? "0.00" : vertTotalVal.toFixed(2);
     
     let biotipo = "";
     const vt = parseFloat(vertTotal);
-    if (vt >= 1) biotipo = "Braquifacial Severo";
+    if (isNaN(vt)) biotipo = "Mesofacial";
+    else if (vt >= 1) biotipo = "Braquifacial Severo";
     else if (vt >= 0.5) biotipo = "Braquifacial";
     else if (vt >= -0.5) biotipo = "Mesofacial";
     else if (vt >= -1.5) biotipo = "Dolicofacial";
@@ -278,13 +290,11 @@ export default function OrtodonciaApp() {
   }, [vertData]);
 
   const handleTeethChange = (arch, tooth, value) => {
-    // AHORA GUARDAMOS EL TEXTO DIRECTAMENTE PARA PREVENIR ERRORES EN MÓVILES
     if (arch === 'max') setMaxilar(prev => ({ ...prev, [tooth]: value }));
     else setMandibula(prev => ({ ...prev, [tooth]: value }));
   };
 
   const handleVertChange = (field, value) => {
-    // GUARDAMOS EL TEXTO DIRECTAMENTE (Permite borrar, dejar en cero o usar decimales libres)
     setVertData(prev => ({ ...prev, [field]: value }));
   };
 
@@ -350,8 +360,8 @@ export default function OrtodonciaApp() {
                       <div key={tooth} className="flex flex-col items-center">
                         <label className="text-xs text-slate-400 mb-1">{tooth}</label>
                         <input 
-                          type="number" 
-                          step="0.1"
+                          type="text"
+                          inputMode="decimal"
                           value={maxilar[tooth]} 
                           onChange={(e) => handleTeethChange('max', tooth, e.target.value)}
                           className={`w-12 h-12 text-center rounded border-2 font-semibold focus:border-indigo-500 focus:ring-0 transition-colors
@@ -372,8 +382,8 @@ export default function OrtodonciaApp() {
                     {[46, 45, 44, 43, 42, 41, 31, 32, 33, 34, 35, 36].map(tooth => (
                       <div key={tooth} className="flex flex-col items-center">
                         <input 
-                          type="number" 
-                          step="0.1"
+                          type="text"
+                          inputMode="decimal"
                           value={mandibula[tooth]} 
                           onChange={(e) => handleTeethChange('mand', tooth, e.target.value)}
                           className={`w-12 h-12 text-center rounded border-2 font-semibold focus:border-indigo-500 focus:ring-0 transition-colors
@@ -448,7 +458,8 @@ export default function OrtodonciaApp() {
                 <div className="mb-6 p-4 bg-orange-50 rounded-xl border border-orange-100">
                   <label className="block text-sm font-semibold text-orange-900 mb-1">Edad del Paciente</label>
                   <input 
-                    type="number" 
+                    type="text" 
+                    inputMode="numeric"
                     value={vertData.edad}
                     onChange={(e) => handleVertChange('edad', e.target.value)}
                     className="w-full p-2 rounded border border-orange-200 focus:ring-orange-500 font-bold"
@@ -460,8 +471,8 @@ export default function OrtodonciaApp() {
                   <div key={key} className="flex justify-between items-center gap-4">
                     <label className="text-sm font-medium text-slate-600">{vertLabels[key]}</label>
                     <input 
-                      type="number" 
-                      step="0.1"
+                      type="text" 
+                      inputMode="decimal"
                       value={vertData[key]}
                       onChange={(e) => handleVertChange(key, e.target.value)}
                       className="w-24 p-2 rounded border border-slate-300 text-center font-bold text-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
@@ -474,7 +485,7 @@ export default function OrtodonciaApp() {
             <div className="lg:col-span-8 flex flex-col gap-6">
               <div className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-200 flex flex-col items-center text-center">
                 <p className="text-slate-500 font-medium mb-2">Índice VERT (Ricketts)</p>
-                <h1 className={`text-5xl md:text-6xl font-black tracking-tighter mb-4 ${analisisVert.vertTotal > 0 ? 'text-sky-600' : 'text-rose-600'}`}>
+                <h1 className={`text-5xl md:text-6xl font-black tracking-tighter mb-4 ${parseFloat(analisisVert.vertTotal) > 0 ? 'text-sky-600' : 'text-rose-600'}`}>
                   {analisisVert.vertTotal}
                 </h1>
                 <div className="inline-block bg-slate-900 text-white px-6 py-2 rounded-full font-bold text-lg md:text-xl">
@@ -497,7 +508,7 @@ export default function OrtodonciaApp() {
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-sm">
                       {Object.keys(vertLabels).map((v) => {
-                        const d = analisisVert.detalles[v];
+                        const d = analisisVert.detalles[v] || { normaEdad: 0, ds: 0, valorSigno: 0 };
                         const baseNorms = {
                           ejeFacial: { base: 90, ds: 3 },
                           profunFacial: { base: 87, ds: 3 },
@@ -505,16 +516,20 @@ export default function OrtodonciaApp() {
                           altFacialInf: { base: 47, ds: 4 },
                           arcoMandibular: { base: 26, ds: 4 }
                         };
+
+                        const normaEdadFormatted = (typeof d.normaEdad === 'number' && !isNaN(d.normaEdad)) ? d.normaEdad.toFixed(1) : '0.0';
+                        const valorSignoNum = typeof d.valorSigno === 'number' && !isNaN(d.valorSigno) ? d.valorSigno : 0;
+                        const valorSignoFormatted = (valorSignoNum > 0 ? '+' : '') + valorSignoNum.toFixed(2);
                         
                         return (
                           <tr key={v} className="hover:bg-slate-50">
                             <td className="px-4 py-3 font-medium text-slate-700 whitespace-nowrap">{vertLabels[v]}</td>
-                            <td className="px-4 py-3 text-slate-500">{baseNorms[v].base}</td>
-                            <td className="px-4 py-3 text-slate-500">{baseNorms[v].ds}</td>
-                            <td className="px-4 py-3 font-semibold text-slate-800">{d.normaEdad.toFixed(1)}</td>
+                            <td className="px-4 py-3 text-slate-500">{baseNorms[v]?.base ?? '-'}</td>
+                            <td className="px-4 py-3 text-slate-500">{baseNorms[v]?.ds ?? '-'}</td>
+                            <td className="px-4 py-3 font-semibold text-slate-800">{normaEdadFormatted}</td>
                             <td className="px-4 py-3 font-bold text-indigo-600">{vertData[v]}</td>
-                            <td className={`px-4 py-3 font-bold ${d.valorSigno < 0 ? 'text-rose-500' : 'text-sky-500'}`}>
-                              {d.valorSigno > 0 ? '+' : ''}{d.valorSigno.toFixed(2)}
+                            <td className={`px-4 py-3 font-bold ${valorSignoNum < 0 ? 'text-rose-500' : 'text-sky-500'}`}>
+                              {valorSignoFormatted}
                             </td>
                           </tr>
                         );
