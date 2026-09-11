@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 
 // --- COMPONENTE TOLLARO (Integrado como pestaña) ---
@@ -177,6 +176,7 @@ export default function OrtodonciaApp() {
     46: "10", 45: "7", 44: "7", 43: "7", 42: "6", 41: "5", 31: "5", 32: "6", 33: "7", 34: "7", 35: "7", 36: "10"
   });
 
+  // Estado para el cálculo VERT (Almacenado como texto temporalmente durante la edición)
   const [vertData, setVertData] = useState({
     edad: "9",
     ejeFacial: "82",
@@ -286,7 +286,7 @@ export default function OrtodonciaApp() {
     else if (vt >= -1.5) biotipo = "Dolicofacial";
     else biotipo = "Dolicofacial Severo";
 
-    return { difEdad, edadCalculo, detalles, vertTotal, biotipo };
+    return { difEdad, detalles, vertTotal, biotipo };
   }, [vertData]);
 
   const handleTeethChange = (arch, tooth, value) => {
@@ -464,7 +464,7 @@ export default function OrtodonciaApp() {
                     onChange={(e) => handleVertChange('edad', e.target.value)}
                     className="w-full p-2 rounded border border-orange-200 focus:ring-orange-500 font-bold"
                   />
-                  <p className="text-xs text-orange-700 mt-1">Edad de cálculo: {analisisVert.edadCalculo} años</p>
+                  <p className="text-xs text-orange-700 mt-1">Diferencia usada: {analisisVert.difEdad} años</p>
                 </div>
 
                 {Object.keys(vertLabels).map(key => (
@@ -499,12 +499,9 @@ export default function OrtodonciaApp() {
                     <thead className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider">
                       <tr>
                         <th className="px-4 py-3 whitespace-nowrap">Factor</th>
-                        <th className="px-4 py-3">Norma Base (9a)</th>
+                        <th className="px-4 py-3">Nor(9a)</th>
                         <th className="px-4 py-3">D.S.</th>
-                        {/* Título de columna dinámico con color destacado */}
-                        <th className="px-4 py-3 bg-indigo-100 text-indigo-900 font-bold border-b-2 border-indigo-200">
-                          Norma ({analisisVert.edadCalculo}a)
-                        </th>
+                        <th className="px-4 py-3">Nor(Ajus)</th>
                         <th className="px-4 py-3">Paciente</th>
                         <th className="px-4 py-3">Desvío</th>
                       </tr>
@@ -529,10 +526,7 @@ export default function OrtodonciaApp() {
                             <td className="px-4 py-3 font-medium text-slate-700 whitespace-nowrap">{vertLabels[v]}</td>
                             <td className="px-4 py-3 text-slate-500">{baseNorms[v]?.base ?? '-'}</td>
                             <td className="px-4 py-3 text-slate-500">{baseNorms[v]?.ds ?? '-'}</td>
-                            {/* Celda resaltada para la norma ajustada */}
-                            <td className="px-4 py-3 font-bold text-slate-800 bg-indigo-50/50">
-                              {normaEdadFormatted}
-                            </td>
+                            <td className="px-4 py-3 font-semibold text-slate-800">{normaEdadFormatted}</td>
                             <td className="px-4 py-3 font-bold text-indigo-600">{vertData[v]}</td>
                             <td className={`px-4 py-3 font-bold ${valorSignoNum < 0 ? 'text-rose-500' : 'text-sky-500'}`}>
                               {valorSignoFormatted}
