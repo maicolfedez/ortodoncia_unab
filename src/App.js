@@ -13,6 +13,105 @@ const getNum = (val) => {
   return isNaN(num) ? 0 : num;
 };
 
+// Función de cálculo para Odontometría (Bolton y Tanaka-Johnston)
+const calculateDentario = (maxInputs, mandInputs) => {
+  const sum12MaxRaw = TEETH_MAX_KEYS.reduce((acc, key) => acc + getNum(maxInputs[key]), 0);
+  const sum12MandRaw = TEETH_MAND_KEYS.reduce((acc, key) => acc + getNum(mandInputs[key]), 0);
+
+  const sum6MaxRaw = getNum(maxInputs["13"]) + getNum(maxInputs["12"]) + getNum(maxInputs["11"]) + 
+                     getNum(maxInputs["21"]) + getNum(maxInputs["22"]) + getNum(maxInputs["23"]);
+  
+  const sum6MandRaw = getNum(mandInputs["43"]) + getNum(mandInputs["42"]) + getNum(mandInputs["41"]) + 
+                      getNum(mandInputs["31"]) + getNum(mandInputs["32"]) + getNum(mandInputs["33"]);
+
+  const sum12Max = Number(sum12MaxRaw.toFixed(1));
+  const sum12Mand = Number(sum12MandRaw.toFixed(1));
+  const sum6Max = Number(sum6MaxRaw.toFixed(1));
+  const sum6Mand = Number(sum6MandRaw.toFixed(1));
+
+  const boltonAnteriorVal = sum6Max > 0 ? (sum6Mand / sum6Max) * 100 : 0;
+  const boltonTotalVal = sum12Max > 0 ? (sum12Mand / sum12Max) * 100 : 0;
+
+  const boltonAnterior = isNaN(boltonAnteriorVal) ? "0.0" : boltonAnteriorVal.toFixed(1);
+  const boltonTotal = isNaN(boltonTotalVal) ? "0.0" : boltonTotalVal.toFixed(1);
+
+  const difAnt = boltonAnteriorVal - 77.2;
+  const diagAnt = difAnt > 0 ? 'Aumentado: Exceso inferior' : 'Disminuido: Exceso superior';
+  const difTot = boltonTotalVal - 91.2;
+  const diagTot = difTot > 0 ? 'Aumentado: Exceso inferior' : 'Disminuido: Exceso superior';
+
+  const siiRaw = getNum(mandInputs["42"]) + getNum(mandInputs["41"]) + getNum(mandInputs["31"]) + getNum(mandInputs["32"]); 
+  const sii = Number(siiRaw.toFixed(1));
+  const tanakaSup = (sii / 2) + 11; 
+  const tanakaInf = (sii / 2) + 10.5;
+
+  return {
+    sum12Max, sum12Mand, sum6Max, sum6Mand,
+    boltonAnterior, boltonTotal,
+    diagAnt, diagTot,
+    sii, 
+    tanakaSup: isNaN(tanakaSup) ? "0.0" : tanakaSup.toFixed(1), 
+    tanakaInf: isNaN(tanakaInf) ? "0.0" : tanakaInf.toFixed(1)
+  };
+};
+
+// Función de cálculo para VERT Ricketts
+const calculateVert = (vData) => {
+  const edadNum = getNum(vData.edad);
+  const edadCalculo = edadNum > 0 ? edadNum : 9;
+  const difEdad = edadCalculo - 9;
+
+  const baseNorms = {
+    ejeFacial: { base: 90, ds: 3, ageFactor: 0 },
+    profunFacial: { base: 87, ds: 3, ageFactor: 1 / 3 },
+    anguloPM: { base: 26, ds: 4, ageFactor: -1 / 3 },
+    altFacialInf: { base: 47, ds: 4, ageFactor: 0 },
+    arcoMandibular: { base: 26, ds: 4, ageFactor: 1 / 3 }
+  };
+
+  let sumDeviations = 0;
+  const detalles = {};
+
+  Object.keys(baseNorms).forEach((key) => {
+    const { base, ds, ageFactor } = baseNorms[key];
+    const normaEdad = base + (difEdad * ageFactor);
+    const pacienteVal = getNum(vData[key]);
+
+    let dev = 0;
+    if (key === 'anguloPM' || key === 'altFacialInf') {
+      dev = (normaEdad - pacienteVal) / ds;
+    } else {
+      dev = (pacienteVal - normaEdad) / ds;
+    }
+
+    detalles[key] = {
+      normaEdad,
+      ds,
+      valorSigno: dev
+    };
+
+    sumDeviations += dev;
+  });
+
+  const vertVal = sumDeviations / 5;
+  const vertTotal = vertVal.toFixed(2);
+
+  let biotipo = 'Mesofacial';
+  if (vertVal < -1.5) biotipo = 'Dolicofacial Severo';
+  else if (vertVal < -0.5) biotipo = 'Dolicofacial';
+  else if (vertVal <= 0.5) biotipo = 'Mesofacial';
+  else if (vertVal <= 1.5) biotipo = 'Braquifacial';
+  else biotipo = 'Braquifacial Severo';
+
+  return {
+    edadCalculo,
+    difEdad,
+    detalles,
+    vertTotal,
+    biotipo
+  };
+};
+
 function TollaroTab() {
   const [imageSrc, setImageSrc] = useState('https://lh3.googleusercontent.com/d/1AFFQRm-hgrInhR0qINq310luVxI1mxiM');
   const [imgError, setImgError] = useState(false);
@@ -162,65 +261,43 @@ function TollaroTab() {
 }
 
 export default function OrtodonciaApp() {
-  const [maxilar, setMaxilar] = useState({
+  const initialMaxilar = {
     "16": "10", "15": "7", "14": "7", "13": "8", "12": "6", "11": "8",
     "21": "8", "22": "6", "23": "8", "24": "7", "25": "7", "26": "10"
-  });
+  };
 
-  const [mandibula, setMandibula] = useState({
+  const initialMandibula = {
     "46": "10", "45": "7", "44": "7", "43": "7", "42": "6", "41": "5",
     "31": "5", "32": "6", "33": "7", "34": "7", "35": "7", "36": "10"
-  });
+  };
 
-  const [vertData, setVertData] = useState({
+  const initialVertData = {
     edad: "9",
     ejeFacial: "82",
     profunFacial: "86",
     anguloPM: "35",
     altFacialInf: "57",
     arcoMandibular: "25"
-  });
+  };
+
+  // Estados para capturar entradas de texto
+  const [maxilar, setMaxilar] = useState(initialMaxilar);
+  const [mandibula, setMandibula] = useState(initialMandibula);
+  const [vertData, setVertData] = useState(initialVertData);
 
   const [activeTab, setActiveTab] = useState('bolton');
 
-  // Direct recalculations on every render - guaranteed reactivity in Next.js / Vercel
-  const sum12MaxRaw = TEETH_MAX_KEYS.reduce((acc, key) => acc + getNum(maxilar[key]), 0);
-  const sum12MandRaw = TEETH_MAND_KEYS.reduce((acc, key) => acc + getNum(mandibula[key]), 0);
+  // Estados que guardan los RESULTADOS CALCULADOS solo al hacer clic en "Calcular"
+  const [analisisDentario, setAnalisisDentario] = useState(() => calculateDentario(initialMaxilar, initialMandibula));
+  const [analisisVert, setAnalisisVert] = useState(() => calculateVert(initialVertData));
 
-  const sum6MaxRaw = getNum(maxilar["13"]) + getNum(maxilar["12"]) + getNum(maxilar["11"]) + 
-                     getNum(maxilar["21"]) + getNum(maxilar["22"]) + getNum(maxilar["23"]);
-  
-  const sum6MandRaw = getNum(mandibula["43"]) + getNum(mandibula["42"]) + getNum(mandibula["41"]) + 
-                      getNum(mandibula["31"]) + getNum(mandibula["32"]) + getNum(mandibula["33"]);
+  // Handlers para la ejecución manual del cálculo al presionar los botones
+  const handleCalcularDentario = () => {
+    setAnalisisDentario(calculateDentario(maxilar, mandibula));
+  };
 
-  const sum12Max = Number(sum12MaxRaw.toFixed(1));
-  const sum12Mand = Number(sum12MandRaw.toFixed(1));
-  const sum6Max = Number(sum6MaxRaw.toFixed(1));
-  const sum6Mand = Number(sum6MandRaw.toFixed(1));
-
-  const boltonAnteriorVal = sum6Max > 0 ? (sum6Mand / sum6Max) * 100 : 0;
-  const boltonTotalVal = sum12Max > 0 ? (sum12Mand / sum12Max) * 100 : 0;
-
-  const boltonAnterior = isNaN(boltonAnteriorVal) ? "0.0" : boltonAnteriorVal.toFixed(1);
-  const boltonTotal = isNaN(boltonTotalVal) ? "0.0" : boltonTotalVal.toFixed(1);
-
-  const difAnt = boltonAnteriorVal - 77.2;
-  const diagAnt = difAnt > 0 ? 'Aumentado: Exceso inferior' : 'Disminuido: Exceso superior';
-  const difTot = boltonTotalVal - 91.2;
-  const diagTot = difTot > 0 ? 'Aumentado: Exceso inferior' : 'Disminuido: Exceso superior';
-
-  const siiRaw = getNum(mandibula["42"]) + getNum(mandibula["41"]) + getNum(mandibula["31"]) + getNum(mandibula["32"]); 
-  const sii = Number(siiRaw.toFixed(1));
-  const tanakaSup = (sii / 2) + 11; 
-  const tanakaInf = (sii / 2) + 10.5;
-
-  const analisisDentario = {
-    sum12Max, sum12Mand, sum6Max, sum6Mand,
-    boltonAnterior, boltonTotal,
-    diagAnt, diagTot,
-    sii, 
-    tanakaSup: isNaN(tanakaSup) ? "0.0" : tanakaSup.toFixed(1), 
-    tanakaInf: isNaN(tanakaInf) ? "0.0" : tanakaInf.toFixed(1)
+  const handleCalcularVert = () => {
+    setAnalisisVert(calculateVert(vertData));
   };
 
   const handleTeethChange = (arch, tooth, value) => {
@@ -282,16 +359,27 @@ export default function OrtodonciaApp() {
             
             <div className="lg:col-span-8 space-y-6">
               <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-200">
-                <div className="mb-4">
-                  <h2 className="text-xl font-bold text-slate-800">Odontometría (mm)</h2>
-                  <p className="text-sm text-slate-500">Mide cada diente e ingresa el ancho mesiodistal.</p>
+                <div className="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div>
+                    <h2 className="text-xl font-bold text-slate-800">Odontometría (mm)</h2>
+                    <p className="text-sm text-slate-500">Mide cada diente e ingresa el ancho mesiodistal.</p>
+                  </div>
+                  {/* Botón de calcular en la pestaña de modelos */}
+                  <button
+                    onClick={handleCalcularDentario}
+                    className="w-full sm:w-auto px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-bold rounded-xl shadow-md transition-all flex items-center justify-center gap-2 text-sm"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                    </svg>
+                    Calcular Bolton / Tanaka
+                  </button>
                 </div>
 
                 {/* Maxilar */}
                 <div className="mb-8 overflow-x-auto pb-2 custom-scrollbar">
                   <div className="flex items-center gap-2 mb-2">
                     <span className="font-semibold text-indigo-900 bg-indigo-50 px-2 py-1 rounded">Maxilar</span>
-                    <span className="text-sm text-slate-400">Total: {analisisDentario.sum12Max}mm</span>
                   </div>
                   <div className="flex justify-between gap-1 min-w-max">
                     {[16, 15, 14, 13, 12, 11, 21, 22, 23, 24, 25, 26].map(tooth => (
@@ -314,7 +402,6 @@ export default function OrtodonciaApp() {
                 <div className="overflow-x-auto pb-2 custom-scrollbar">
                   <div className="flex items-center gap-2 mb-2">
                     <span className="font-semibold text-emerald-900 bg-emerald-50 px-2 py-1 rounded">Mandíbula</span>
-                    <span className="text-sm text-slate-400">Total: {analisisDentario.sum12Mand}mm</span>
                   </div>
                   <div className="flex justify-between gap-1 min-w-max">
                     {[46, 45, 44, 43, 42, 41, 31, 32, 33, 34, 35, 36].map(tooth => (
@@ -389,35 +476,47 @@ export default function OrtodonciaApp() {
         {activeTab === 'vert' && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             
-            <div className="lg:col-span-4 bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200">
-              <h2 className="text-xl font-bold text-slate-800 mb-4">Medidas Cefalométricas</h2>
-              
-              <div className="space-y-4">
-                <div className="mb-6 p-4 bg-orange-50 rounded-xl border border-orange-100">
-                  <label className="block text-sm font-semibold text-orange-900 mb-1">Edad del Paciente</label>
-                  <input 
-                    type="text" 
-                    inputMode="numeric"
-                    value={vertData.edad ?? ''}
-                    onChange={(e) => handleVertChange('edad', e.target.value)}
-                    className="w-full p-2 rounded border border-orange-200 focus:ring-orange-500 font-bold"
-                  />
-                  <p className="text-xs text-orange-700 mt-1">Edad usada para norma: {analisisVert.edadCalculo} años (Dif: {analisisVert.difEdad} a)</p>
-                </div>
-
-                {Object.keys(vertLabels).map(key => (
-                  <div key={key} className="flex justify-between items-center gap-4">
-                    <label className="text-sm font-medium text-slate-600">{vertLabels[key]}</label>
+            <div className="lg:col-span-4 bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between">
+              <div>
+                <h2 className="text-xl font-bold text-slate-800 mb-4">Medidas Cefalométricas</h2>
+                
+                <div className="space-y-4">
+                  <div className="mb-6 p-4 bg-orange-50 rounded-xl border border-orange-100">
+                    <label className="block text-sm font-semibold text-orange-900 mb-1">Edad del Paciente</label>
                     <input 
                       type="text" 
-                      inputMode="decimal"
-                      value={vertData[key] ?? ''}
-                      onChange={(e) => handleVertChange(key, e.target.value)}
-                      className="w-24 p-2 rounded border border-slate-300 text-center font-bold text-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                      inputMode="numeric"
+                      value={vertData.edad ?? ''}
+                      onChange={(e) => handleVertChange('edad', e.target.value)}
+                      className="w-full p-2 rounded border border-orange-200 focus:ring-orange-500 font-bold"
                     />
                   </div>
-                ))}
+
+                  {Object.keys(vertLabels).map(key => (
+                    <div key={key} className="flex justify-between items-center gap-4">
+                      <label className="text-sm font-medium text-slate-600">{vertLabels[key]}</label>
+                      <input 
+                        type="text" 
+                        inputMode="decimal"
+                        value={vertData[key] ?? ''}
+                        onChange={(e) => handleVertChange(key, e.target.value)}
+                        className="w-24 p-2 rounded border border-slate-300 text-center font-bold text-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                      />
+                    </div>
+                  ))}
+                </div>
               </div>
+
+              {/* Botón de calcular en la pestaña de VERT */}
+              <button
+                onClick={handleCalcularVert}
+                className="w-full mt-6 py-3 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-bold rounded-xl shadow-md transition-all flex items-center justify-center gap-2 text-base"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                </svg>
+                Calcular VERT
+              </button>
             </div>
 
             <div className="lg:col-span-8 flex flex-col gap-6">
@@ -443,13 +542,12 @@ export default function OrtodonciaApp() {
                         <th className="px-4 py-3 bg-indigo-50/70 text-indigo-900 font-bold border-x border-indigo-100">
                           Norma ({analisisVert.edadCalculo}a)
                         </th>
-                        <th className="px-4 py-3">Paciente</th>
                         <th className="px-4 py-3">Desvío</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-sm">
                       {Object.keys(vertLabels).map((v) => {
-                        const d = analisisVert.detalles[v] || { normaEdad: 0, ds: 0, valorSigno: 0 };
+                        const d = analisisVert.detalles?.[v] || { normaEdad: 0, ds: 0, valorSigno: 0 };
                         const baseNorms = {
                           ejeFacial: { base: 90, ds: 3 },
                           profunFacial: { base: 87, ds: 3 },
@@ -472,7 +570,6 @@ export default function OrtodonciaApp() {
                               {normaEdadFormatted}
                             </td>
 
-                            <td className="px-4 py-3 font-bold text-indigo-600">{vertData[v]}</td>
                             <td className={`px-4 py-3 font-bold ${valorSignoNum < 0 ? 'text-rose-500' : 'text-sky-500'}`}>
                               {valorSignoFormatted}
                             </td>
