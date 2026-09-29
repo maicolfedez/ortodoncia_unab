@@ -1,4 +1,18 @@
+'use client';
 import React, { useState, useMemo, useRef, useEffect } from 'react';
+
+// --- CONSTANTES Y HELPERS GLOBALES (Fuera del componente para optimizar rendimiento en Vercel) ---
+const TEETH_MAX_KEYS = ["16", "15", "14", "13", "12", "11", "21", "22", "23", "24", "25", "26"];
+const TEETH_MAND_KEYS = ["46", "45", "44", "43", "42", "41", "31", "32", "33", "34", "35", "36"];
+
+// Helper ultra-robusto para convertir textos a números (soporta coma decimal, espacios y evita NaN/crashes)
+const getNum = (val) => {
+  if (val === null || val === undefined) return 0;
+  const str = String(val).trim().replace(',', '.');
+  if (str === '' || str === '-') return 0;
+  const num = parseFloat(str);
+  return isNaN(num) ? 0 : num;
+};
 
 // --- COMPONENTE TOLLARO (Integrado como pestaña) ---
 function TollaroTab() {
@@ -15,7 +29,6 @@ function TollaroTab() {
 
   // Iniciar arrastre
   const handlePointerDown = (e, target) => {
-    // Solo hacemos preventDefault si es touch para evitar scroll indeseado en móviles
     if (e.type === 'touchstart') e.preventDefault();
     setDraggingIdx(target);
   };
@@ -25,13 +38,11 @@ function TollaroTab() {
     const handlePointerMove = (e) => {
       if (draggingIdx === null || !imageRef.current) return;
       
-      // Obtener coordenada Y (Soporte para Mouse y Touch)
       const clientY = e.touches ? e.touches[0].clientY : e.clientY;
       const rect = imageRef.current.getBoundingClientRect();
       
-      // Calcular posición relativa (0.0 a 1.0)
       let relY = (clientY - rect.top) / rect.height;
-      relY = Math.max(0, Math.min(1, relY)); // Restringir dentro de la imagen
+      relY = Math.max(0, Math.min(1, relY));
 
       if (draggingIdx === 'frame') {
         setFrameRelY(relY);
@@ -73,15 +84,12 @@ function TollaroTab() {
     }
   };
 
-  // Cálculo visual de los pixeles basado en el tamaño natural de la imagen
   const currentPixelY = imageRef.current && imageRef.current.naturalHeight && imgLoaded
     ? Math.round(frameRelY * imageRef.current.naturalHeight) 
     : 0;
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden relative mt-6">
-      
-      {/* Instrucciones Tollaro */}
       <div className="p-6 bg-slate-50 border-b border-slate-200">
         <h2 className="text-blue-900 font-bold text-sm uppercase tracking-wider mb-3">Instrucciones de uso Tollaro</h2>
         <ol className="space-y-2 text-slate-700 text-sm">
@@ -91,7 +99,6 @@ function TollaroTab() {
         </ol>
       </div>
 
-      {/* Header Info Tollaro */}
       <div className="bg-slate-900 p-3 text-white flex justify-between items-center relative z-40">
         <div className="flex items-center gap-2 ml-2 text-blue-400">
           <span className="text-[10px] font-bold uppercase tracking-widest">Área Interactiva</span>
@@ -102,7 +109,6 @@ function TollaroTab() {
         </div>
       </div>
 
-      {/* Contenedor de la Imagen */}
       <div className="relative flex justify-center items-start min-h-[60vh] py-10 touch-none overflow-hidden bg-slate-100">
         {imgError ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-50 z-40 p-6 text-center">
@@ -123,11 +129,10 @@ function TollaroTab() {
               onLoad={() => setImgLoaded(true)}
             />
 
-            {/* Marco Deslizante Azul */}
             <div 
               className="absolute border-2 border-blue-500 bg-blue-500/15 shadow-[0_0_15px_rgba(59,130,246,0.3)] z-30 cursor-grab active:cursor-grabbing flex items-center justify-center transition-opacity"
               style={{
-                left: '1rem', // padding compensating px-4
+                left: '1rem',
                 width: 'calc(100% - 2rem)',
                 height: '40%',
                 top: `${frameRelY * 100}%`,
@@ -137,17 +142,15 @@ function TollaroTab() {
               onMouseDown={(e) => handlePointerDown(e, 'frame')}
               onTouchStart={(e) => handlePointerDown(e, 'frame')}
             >
-              {/* Línea roja central */}
               <div className="w-full h-[2px] bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.9)] absolute top-1/2 -translate-y-1/2" />
             </div>
 
-            {/* Marcadores Verdes (5 Columnas) */}
             {markersRelY.map((relY, idx) => (
               <div 
                 key={idx}
                 className="absolute w-6 h-6 md:w-8 md:h-8 bg-green-500/50 border-2 border-white/90 rounded-full cursor-ns-resize z-40 shadow-lg flex items-center justify-center hover:bg-green-500/80 transition-colors -translate-x-1/2 -translate-y-1/2 backdrop-blur-sm"
                 style={{
-                  left: `calc(1rem + ${(idx * 20) + 10}% - 0.2rem)`, // Ajuste dinámico exacto al centro de cada columna (20% por col)
+                  left: `calc(1rem + ${(idx * 20) + 10}% - 0.2rem)`,
                   top: `${relY * 100}%`
                 }}
                 onMouseDown={(e) => handlePointerDown(e, idx)}
@@ -164,19 +167,17 @@ function TollaroTab() {
 }
 
 export default function OrtodonciaApp() {
-  
-  // --- ESTADOS INICIALES ---
-  // AHORA LOS ESTADOS SON STRINGS ("") PARA EVITAR EL BUG DEL TECLADO MÓVIL AL BORRAR O ESCRIBIR "0"
-  
+  // --- ESTADOS INICIALES (Con llaves explícitas en texto) ---
   const [maxilar, setMaxilar] = useState({
-    16: "10", 15: "7", 14: "7", 13: "8", 12: "6", 11: "8", 21: "8", 22: "6", 23: "8", 24: "7", 25: "7", 26: "10"
+    "16": "10", "15": "7", "14": "7", "13": "8", "12": "6", "11": "8",
+    "21": "8", "22": "6", "23": "8", "24": "7", "25": "7", "26": "10"
   });
 
   const [mandibula, setMandibula] = useState({
-    46: "10", 45: "7", 44: "7", 43: "7", 42: "6", 41: "5", 31: "5", 32: "6", 33: "7", 34: "7", 35: "7", 36: "10"
+    "46": "10", "45": "7", "44": "7", "43": "7", "42": "6", "41": "5",
+    "31": "5", "32": "6", "33": "7", "34": "7", "35": "7", "36": "10"
   });
 
-  // Estado para el cálculo VERT (Almacenado como texto temporalmente durante la edición)
   const [vertData, setVertData] = useState({
     edad: "9",
     ejeFacial: "82",
@@ -188,30 +189,18 @@ export default function OrtodonciaApp() {
 
   const [activeTab, setActiveTab] = useState('bolton'); // 'bolton' | 'vert' | 'tollaro'
 
-  
-  // Helper ultra-robusto para convertir textos a números (soporta coma decimal, espacios y evita NaN/crashes)
-  const getNum = (val) => {
-    if (val === null || val === undefined) return 0;
-    const str = String(val).trim().replace(',', '.');
-    if (str === '' || str === '-') return 0;
-    const num = parseFloat(str);
-    return isNaN(num) ? 0 : num;
-  };
-
+  // Cálculo reactivo garantizado para Vercel usando mapeo directo por llave
   const analisisDentario = useMemo(() => {
-    const valsMax = Object.values(maxilar).map(getNum);
-    const valsMand = Object.values(mandibula).map(getNum);
-
-    // Suma de los 12 dientes
-    const sum12Max = valsMax.reduce((a, b) => a + b, 0); 
-    const sum12Mand = valsMand.reduce((a, b) => a + b, 0); 
+    // Suma de los 12 dientes maxilares y mandibulares
+    const sum12Max = TEETH_MAX_KEYS.reduce((acc, key) => acc + getNum(maxilar[key]), 0);
+    const sum12Mand = TEETH_MAND_KEYS.reduce((acc, key) => acc + getNum(mandibula[key]), 0);
 
     // Suma de los 6 anteriores (canino a canino)
-    const sum6Max = getNum(maxilar[13]) + getNum(maxilar[12]) + getNum(maxilar[11]) + 
-                    getNum(maxilar[21]) + getNum(maxilar[22]) + getNum(maxilar[23]);
+    const sum6Max = getNum(maxilar["13"]) + getNum(maxilar["12"]) + getNum(maxilar["11"]) + 
+                    getNum(maxilar["21"]) + getNum(maxilar["22"]) + getNum(maxilar["23"]);
     
-    const sum6Mand = getNum(mandibula[43]) + getNum(mandibula[42]) + getNum(mandibula[41]) + 
-                     getNum(mandibula[31]) + getNum(mandibula[32]) + getNum(mandibula[33]);
+    const sum6Mand = getNum(mandibula["43"]) + getNum(mandibula["42"]) + getNum(mandibula["41"]) + 
+                     getNum(mandibula["31"]) + getNum(mandibula["32"]) + getNum(mandibula["33"]);
 
     // Cálculos Bolton
     const boltonAnteriorVal = sum6Max > 0 ? (sum6Mand / sum6Max) * 100 : 0;
@@ -227,7 +216,7 @@ export default function OrtodonciaApp() {
     const diagTot = difTot > 0 ? 'Aumentado: Exceso inferior' : 'Disminuido: Exceso superior';
 
     // Tanaka - Johnston (Suma de los 4 incisivos inferiores)
-    const sii = getNum(mandibula[42]) + getNum(mandibula[41]) + getNum(mandibula[31]) + getNum(mandibula[32]); 
+    const sii = getNum(mandibula["42"]) + getNum(mandibula["41"]) + getNum(mandibula["31"]) + getNum(mandibula["32"]); 
     const tanakaSup = (sii / 2) + 11; 
     const tanakaInf = (sii / 2) + 10.5; 
 
@@ -241,16 +230,14 @@ export default function OrtodonciaApp() {
     };
   }, [maxilar, mandibula]);
 
-
   const analisisVert = useMemo(() => {
-    // Convertir el texto a número solo en el momento de calcular
     const edadRaw = getNum(vertData.edad);
     const edadCalculo = Math.min(Math.max(edadRaw, 9), 19); // Máximo 19, Mínimo 9
     const difEdad = edadCalculo - 9;
 
     const normas = {
       ejeFacial: { base: 90, varAnual: 0, ds: 3, reverseSign: false },
-      profunFacial: { base: 87, varAnual: 0.3333333333, ds: 3, reverseSign: false },
+      profunFacial: { base: 87, varAnual: 0.3333333333333333, ds: 3, reverseSign: false },
       anguloPM: { base: 26, varAnual: -0.3, ds: 4, reverseSign: true }, 
       altFacialInf: { base: 47, varAnual: 0, ds: 4, reverseSign: true }, 
       arcoMandibular: { base: 26, varAnual: 0.5, ds: 4, reverseSign: false }
@@ -286,12 +273,16 @@ export default function OrtodonciaApp() {
     else if (vt >= -1.5) biotipo = "Dolicofacial";
     else biotipo = "Dolicofacial Severo";
 
-    return { difEdad, detalles, vertTotal, biotipo };
+    return { edadCalculo, difEdad, detalles, vertTotal, biotipo };
   }, [vertData]);
 
   const handleTeethChange = (arch, tooth, value) => {
-    if (arch === 'max') setMaxilar(prev => ({ ...prev, [tooth]: value }));
-    else setMandibula(prev => ({ ...prev, [tooth]: value }));
+    const toothKey = String(tooth);
+    if (arch === 'max') {
+      setMaxilar(prev => ({ ...prev, [toothKey]: value }));
+    } else {
+      setMandibula(prev => ({ ...prev, [toothKey]: value }));
+    }
   };
 
   const handleVertChange = (field, value) => {
@@ -302,7 +293,7 @@ export default function OrtodonciaApp() {
     ejeFacial: "Eje Facial",
     profunFacial: "Profun. Facial",
     anguloPM: "Ángulo del PM",
-    altFacialInf: "Altura Facial Inferior",
+    altFacialInf: "Alt. Facial Inf.",
     arcoMandibular: "Arco Mandibular"
   };
 
@@ -362,7 +353,7 @@ export default function OrtodonciaApp() {
                         <input 
                           type="text"
                           inputMode="decimal"
-                          value={maxilar[tooth]} 
+                          value={maxilar[String(tooth)] ?? ''} 
                           onChange={(e) => handleTeethChange('max', tooth, e.target.value)}
                           className={`w-12 h-12 text-center rounded border-2 font-semibold focus:border-indigo-500 focus:ring-0 transition-colors
                             ${[13,12,11,21,22,23].includes(tooth) ? 'bg-blue-50 border-blue-200 text-blue-900' : 'bg-slate-50 border-slate-200 text-slate-700'}`}
@@ -384,7 +375,7 @@ export default function OrtodonciaApp() {
                         <input 
                           type="text"
                           inputMode="decimal"
-                          value={mandibula[tooth]} 
+                          value={mandibula[String(tooth)] ?? ''} 
                           onChange={(e) => handleTeethChange('mand', tooth, e.target.value)}
                           className={`w-12 h-12 text-center rounded border-2 font-semibold focus:border-indigo-500 focus:ring-0 transition-colors
                             ${[43,42,41,31,32,33].includes(tooth) ? 'bg-blue-50 border-blue-200 text-blue-900' : 'bg-slate-50 border-slate-200 text-slate-700'}`}
@@ -408,7 +399,7 @@ export default function OrtodonciaApp() {
                       <p className="text-2xl font-black text-indigo-600">{analisisDentario.boltonAnterior}%</p>
                     </div>
                     <p className="text-xs text-slate-400 mt-1">Norma: 77.2% | Sumas: M={analisisDentario.sum6Max} m={analisisDentario.sum6Mand}</p>
-                    <div className={`mt-2 p-2 rounded text-sm font-medium ${analisisDentario.boltonAnterior > 77.2 ? 'bg-rose-50 text-rose-700' : 'bg-sky-50 text-sky-700'}`}>
+                    <div className={`mt-2 p-2 rounded text-sm font-medium ${parseFloat(analisisDentario.boltonAnterior) > 77.2 ? 'bg-rose-50 text-rose-700' : 'bg-sky-50 text-sky-700'}`}>
                       {analisisDentario.diagAnt}
                     </div>
                   </div>
@@ -418,7 +409,7 @@ export default function OrtodonciaApp() {
                       <p className="text-2xl font-black text-indigo-600">{analisisDentario.boltonTotal}%</p>
                     </div>
                     <p className="text-xs text-slate-400 mt-1">Norma: 91.2% | Sumas: M={analisisDentario.sum12Max} m={analisisDentario.sum12Mand}</p>
-                    <div className={`mt-2 p-2 rounded text-sm font-medium ${analisisDentario.boltonTotal > 91.2 ? 'bg-rose-50 text-rose-700' : 'bg-sky-50 text-sky-700'}`}>
+                    <div className={`mt-2 p-2 rounded text-sm font-medium ${parseFloat(analisisDentario.boltonTotal) > 91.2 ? 'bg-rose-50 text-rose-700' : 'bg-sky-50 text-sky-700'}`}>
                       {analisisDentario.diagTot}
                     </div>
                   </div>
@@ -460,11 +451,11 @@ export default function OrtodonciaApp() {
                   <input 
                     type="text" 
                     inputMode="numeric"
-                    value={vertData.edad}
+                    value={vertData.edad ?? ''}
                     onChange={(e) => handleVertChange('edad', e.target.value)}
                     className="w-full p-2 rounded border border-orange-200 focus:ring-orange-500 font-bold"
                   />
-                  <p className="text-xs text-orange-700 mt-1">Diferencia usada: {analisisVert.difEdad} años</p>
+                  <p className="text-xs text-orange-700 mt-1">Edad usada para norma: {analisisVert.edadCalculo} años (Dif: {analisisVert.difEdad} a)</p>
                 </div>
 
                 {Object.keys(vertLabels).map(key => (
@@ -473,7 +464,7 @@ export default function OrtodonciaApp() {
                     <input 
                       type="text" 
                       inputMode="decimal"
-                      value={vertData[key]}
+                      value={vertData[key] ?? ''}
                       onChange={(e) => handleVertChange(key, e.target.value)}
                       className="w-24 p-2 rounded border border-slate-300 text-center font-bold text-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
                     />
@@ -493,15 +484,19 @@ export default function OrtodonciaApp() {
                 </div>
               </div>
 
+              {/* Tabla VERT con Columna Dinámica de Edad */}
               <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full text-left">
                     <thead className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider">
                       <tr>
                         <th className="px-4 py-3 whitespace-nowrap">Factor</th>
-                        <th className="px-4 py-3">Nor(9a)</th>
+                        <th className="px-4 py-3">Norma Base (9a)</th>
                         <th className="px-4 py-3">D.S.</th>
-                        <th className="px-4 py-3">Nor(Ajus)</th>
+                        {/* Título de la norma dinámico con resaltado visual */}
+                        <th className="px-4 py-3 bg-indigo-50/70 text-indigo-900 font-bold border-x border-indigo-100">
+                          Norma ({analisisVert.edadCalculo}a)
+                        </th>
                         <th className="px-4 py-3">Paciente</th>
                         <th className="px-4 py-3">Desvío</th>
                       </tr>
@@ -526,7 +521,12 @@ export default function OrtodonciaApp() {
                             <td className="px-4 py-3 font-medium text-slate-700 whitespace-nowrap">{vertLabels[v]}</td>
                             <td className="px-4 py-3 text-slate-500">{baseNorms[v]?.base ?? '-'}</td>
                             <td className="px-4 py-3 text-slate-500">{baseNorms[v]?.ds ?? '-'}</td>
-                            <td className="px-4 py-3 font-semibold text-slate-800">{normaEdadFormatted}</td>
+                            
+                            {/* Valor Ajustado Dinámicamente para la Edad */}
+                            <td className="px-4 py-3 font-bold text-indigo-900 bg-indigo-50/40 border-x border-indigo-100">
+                              {normaEdadFormatted}
+                            </td>
+
                             <td className="px-4 py-3 font-bold text-indigo-600">{vertData[v]}</td>
                             <td className={`px-4 py-3 font-bold ${valorSignoNum < 0 ? 'text-rose-500' : 'text-sky-500'}`}>
                               {valorSignoFormatted}
