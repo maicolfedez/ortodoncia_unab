@@ -8,12 +8,11 @@ const TEETH_MAND_KEYS = ["46", "45", "44", "43", "42", "41", "31", "32", "33", "
 const getNum = (val) => {
   if (val === null || val === undefined) return 0;
   const str = String(val).trim().replace(',', '.');
-  if (str === '' || str === '-') return 0;
+  if (str === '' || str === '-' || isNaN(Number(str))) return 0;
   const num = parseFloat(str);
   return isNaN(num) ? 0 : num;
 };
 
-// Función de cálculo para Odontometría (Bolton y Tanaka-Johnston)
 const calculateDentario = (maxInputs, mandInputs) => {
   const sum12MaxRaw = TEETH_MAX_KEYS.reduce((acc, key) => acc + getNum(maxInputs[key]), 0);
   const sum12MandRaw = TEETH_MAND_KEYS.reduce((acc, key) => acc + getNum(mandInputs[key]), 0);
@@ -55,7 +54,6 @@ const calculateDentario = (maxInputs, mandInputs) => {
   };
 };
 
-// Función de cálculo para VERT Ricketts
 const calculateVert = (vData) => {
   const edadNum = getNum(vData.edad);
   const edadCalculo = edadNum > 0 ? edadNum : 9;
@@ -124,7 +122,6 @@ function TollaroTab() {
   const [draggingIdx, setDraggingIdx] = useState(null);
 
   const handlePointerDown = (e, target) => {
-    if (e.type === 'touchstart') e.preventDefault();
     setDraggingIdx(target);
   };
 
@@ -154,7 +151,7 @@ function TollaroTab() {
     if (draggingIdx !== null) {
       window.addEventListener('mousemove', handlePointerMove);
       window.addEventListener('mouseup', handlePointerUp);
-      window.addEventListener('touchmove', handlePointerMove, { passive: false });
+      window.addEventListener('touchmove', handlePointerMove, { passive: true });
       window.addEventListener('touchend', handlePointerUp);
     }
 
@@ -224,7 +221,7 @@ function TollaroTab() {
             />
 
             <div 
-              className="absolute border-2 border-blue-500 bg-blue-500/15 shadow-[0_0_15px_rgba(59,130,246,0.3)] z-30 cursor-grab active:cursor-grabbing flex items-center justify-center transition-opacity"
+              className="absolute border-2 border-blue-500 bg-blue-500/15 shadow-[0_0_15px_rgba(59,130,246,0.3)] z-30 cursor-grab active:cursor-grabbing flex items-center justify-center transition-opacity touch-none"
               style={{
                 left: '1rem',
                 width: 'calc(100% - 2rem)',
@@ -233,8 +230,7 @@ function TollaroTab() {
                 transform: 'translateY(-50%)',
                 clipPath: 'polygon(0% 42%, 18% 42%, 18% 17%, 42% 17%, 42% 22.5%, 60% 22.5%, 60% 3%, 82% 3%, 82% 44%, 100% 44%, 100% 56%, 82% 56%, 82% 95%, 60% 95%, 60% 78%, 42% 78%, 42% 83%, 18% 83%, 18% 58%, 0% 58%)'
               }}
-              onMouseDown={(e) => handlePointerDown(e, 'frame')}
-              onTouchStart={(e) => handlePointerDown(e, 'frame')}
+              onPointerDown={(e) => handlePointerDown(e, 'frame')}
             >
               <div className="w-full h-[2px] bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.9)] absolute top-1/2 -translate-y-1/2" />
             </div>
@@ -242,13 +238,12 @@ function TollaroTab() {
             {markersRelY.map((relY, idx) => (
               <div 
                 key={idx}
-                className="absolute w-6 h-6 md:w-8 md:h-8 bg-green-500/50 border-2 border-white/90 rounded-full cursor-ns-resize z-40 shadow-lg flex items-center justify-center hover:bg-green-500/80 transition-colors -translate-x-1/2 -translate-y-1/2 backdrop-blur-sm"
+                className="absolute w-6 h-6 md:w-8 md:h-8 bg-green-500/50 border-2 border-white/90 rounded-full cursor-ns-resize z-40 shadow-lg flex items-center justify-center hover:bg-green-500/80 transition-colors -translate-x-1/2 -translate-y-1/2 backdrop-blur-sm touch-none"
                 style={{
                   left: `calc(1rem + ${(idx * 20) + 10}% - 0.2rem)`,
                   top: `${relY * 100}%`
                 }}
-                onMouseDown={(e) => handlePointerDown(e, idx)}
-                onTouchStart={(e) => handlePointerDown(e, idx)}
+                onPointerDown={(e) => handlePointerDown(e, idx)}
               >
                 <div className="w-1.5 h-1.5 md:w-2 md:h-2 bg-white rounded-full opacity-90 shadow-sm" />
               </div>
@@ -280,23 +275,22 @@ export default function OrtodonciaApp() {
     arcoMandibular: "25"
   };
 
-  // Estados para capturar entradas de texto
   const [maxilar, setMaxilar] = useState(initialMaxilar);
   const [mandibula, setMandibula] = useState(initialMandibula);
   const [vertData, setVertData] = useState(initialVertData);
 
   const [activeTab, setActiveTab] = useState('bolton');
 
-  // Estados que guardan los RESULTADOS CALCULADOS solo al hacer clic en "Calcular"
   const [analisisDentario, setAnalisisDentario] = useState(() => calculateDentario(initialMaxilar, initialMandibula));
   const [analisisVert, setAnalisisVert] = useState(() => calculateVert(initialVertData));
 
-  // Handlers para la ejecución manual del cálculo al presionar los botones
-  const handleCalcularDentario = () => {
+  const handleCalcularDentario = (e) => {
+    if (e) e.preventDefault();
     setAnalisisDentario(calculateDentario(maxilar, mandibula));
   };
 
-  const handleCalcularVert = () => {
+  const handleCalcularVert = (e) => {
+    if (e) e.preventDefault();
     setAnalisisVert(calculateVert(vertData));
   };
 
@@ -333,18 +327,21 @@ export default function OrtodonciaApp() {
           </div>
           <div className="flex flex-wrap justify-center gap-2">
             <button 
+              type="button"
               onClick={() => setActiveTab('bolton')} 
               className={`px-3 md:px-4 py-2 rounded-lg font-medium text-sm md:text-base transition-colors ${activeTab === 'bolton' ? 'bg-indigo-500 text-white shadow-md' : 'bg-indigo-950/50 text-indigo-300 hover:bg-indigo-800'}`}
             >
               Modelos
             </button>
             <button 
+              type="button"
               onClick={() => setActiveTab('vert')} 
               className={`px-3 md:px-4 py-2 rounded-lg font-medium text-sm md:text-base transition-colors ${activeTab === 'vert' ? 'bg-indigo-500 text-white shadow-md' : 'bg-indigo-950/50 text-indigo-300 hover:bg-indigo-800'}`}
             >
               VERT Ricketts
             </button>
             <button 
+              type="button"
               onClick={() => setActiveTab('tollaro')} 
               className={`px-3 md:px-4 py-2 rounded-lg font-medium text-sm md:text-base transition-colors ${activeTab === 'tollaro' ? 'bg-indigo-500 text-white shadow-md' : 'bg-indigo-950/50 text-indigo-300 hover:bg-indigo-800'}`}
             >
@@ -353,7 +350,7 @@ export default function OrtodonciaApp() {
           </div>
         </div>
 
-        {/* PESTAÑA BOLTON Y TANAKA */}
+        {}
         {activeTab === 'bolton' && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             
@@ -366,6 +363,7 @@ export default function OrtodonciaApp() {
                   </div>
                   {/* Botón de calcular en la pestaña de modelos */}
                   <button
+                    type="button"
                     onClick={handleCalcularDentario}
                     className="w-full sm:w-auto px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-bold rounded-xl shadow-md transition-all flex items-center justify-center gap-2 text-sm"
                   >
@@ -422,6 +420,7 @@ export default function OrtodonciaApp() {
               </div>
             </div>
 
+            {}
             <div className="lg:col-span-4 space-y-6">
               {/* Resultados Bolton */}
               <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 border-t-4 border-t-indigo-500">
@@ -472,7 +471,7 @@ export default function OrtodonciaApp() {
           </div>
         )}
 
-        {/* PESTAÑA VERT */}
+        {}
         {activeTab === 'vert' && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             
@@ -488,7 +487,7 @@ export default function OrtodonciaApp() {
                       inputMode="numeric"
                       value={vertData.edad ?? ''}
                       onChange={(e) => handleVertChange('edad', e.target.value)}
-                      className="w-full p-2 rounded border border-orange-200 focus:ring-orange-500 font-bold"
+                      className="w-full p-2 rounded border border-orange-200 focus:ring-orange-500 font-bold text-slate-800"
                     />
                   </div>
 
@@ -509,6 +508,7 @@ export default function OrtodonciaApp() {
 
               {/* Botón de calcular en la pestaña de VERT */}
               <button
+                type="button"
                 onClick={handleCalcularVert}
                 className="w-full mt-6 py-3 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-bold rounded-xl shadow-md transition-all flex items-center justify-center gap-2 text-base"
               >
