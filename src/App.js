@@ -1,11 +1,10 @@
 'use client';
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 
-// --- CONSTANTES Y HELPERS GLOBALES (Fuera del componente para optimizar rendimiento en Vercel) ---
 const TEETH_MAX_KEYS = ["16", "15", "14", "13", "12", "11", "21", "22", "23", "24", "25", "26"];
 const TEETH_MAND_KEYS = ["46", "45", "44", "43", "42", "41", "31", "32", "33", "34", "35", "36"];
 
-// Helper ultra-robusto para convertir textos a números (soporta coma decimal, espacios y evita NaN/crashes)
+// Helper ultra-robusto para convertir textos a números
 const getNum = (val) => {
   if (val === null || val === undefined) return 0;
   const str = String(val).trim().replace(',', '.');
@@ -14,26 +13,22 @@ const getNum = (val) => {
   return isNaN(num) ? 0 : num;
 };
 
-// --- COMPONENTE TOLLARO (Integrado como pestaña) ---
 function TollaroTab() {
   const [imageSrc, setImageSrc] = useState('https://lh3.googleusercontent.com/d/1AFFQRm-hgrInhR0qINq310luVxI1mxiM');
   const [imgError, setImgError] = useState(false);
   const [imgLoaded, setImgLoaded] = useState(false);
   
-  // Guardamos las posiciones como porcentajes relativos (0 a 1) para que sea responsivo
   const [frameRelY, setFrameRelY] = useState(0.5);
   const [markersRelY, setMarkersRelY] = useState([0.1, 0.1, 0.1, 0.1, 0.1]);
 
   const imageRef = useRef(null);
-  const [draggingIdx, setDraggingIdx] = useState(null); // 'frame' o 0,1,2,3,4
+  const [draggingIdx, setDraggingIdx] = useState(null);
 
-  // Iniciar arrastre
   const handlePointerDown = (e, target) => {
     if (e.type === 'touchstart') e.preventDefault();
     setDraggingIdx(target);
   };
 
-  // Efecto global para manejar el movimiento del puntero
   useEffect(() => {
     const handlePointerMove = (e) => {
       if (draggingIdx === null || !imageRef.current) return;
@@ -167,7 +162,6 @@ function TollaroTab() {
 }
 
 export default function OrtodonciaApp() {
-  // --- ESTADOS INICIALES (Con llaves explícitas en texto) ---
   const [maxilar, setMaxilar] = useState({
     "16": "10", "15": "7", "14": "7", "13": "8", "12": "6", "11": "8",
     "21": "8", "22": "6", "23": "8", "24": "7", "25": "7", "26": "10"
@@ -187,94 +181,85 @@ export default function OrtodonciaApp() {
     arcoMandibular: "25"
   });
 
-  const [activeTab, setActiveTab] = useState('bolton'); // 'bolton' | 'vert' | 'tollaro'
+  const [activeTab, setActiveTab] = useState('bolton');
 
-  // Cálculo reactivo garantizado para Vercel usando mapeo directo por llave
-  const analisisDentario = useMemo(() => {
-    // Suma de los 12 dientes maxilares y mandibulares
-    const sum12Max = TEETH_MAX_KEYS.reduce((acc, key) => acc + getNum(maxilar[key]), 0);
-    const sum12Mand = TEETH_MAND_KEYS.reduce((acc, key) => acc + getNum(mandibula[key]), 0);
+  // Direct calculations on every single render cycle - no useMemo caching bugs in Vercel
+  const sum12Max = TEETH_MAX_KEYS.reduce((acc, key) => acc + getNum(maxilar[key]), 0);
+  const sum12Mand = TEETH_MAND_KEYS.reduce((acc, key) => acc + getNum(mandibula[key]), 0);
 
-    // Suma de los 6 anteriores (canino a canino)
-    const sum6Max = getNum(maxilar["13"]) + getNum(maxilar["12"]) + getNum(maxilar["11"]) + 
-                    getNum(maxilar["21"]) + getNum(maxilar["22"]) + getNum(maxilar["23"]);
+  const sum6Max = getNum(maxilar["13"]) + getNum(maxilar["12"]) + getNum(maxilar["11"]) + 
+                  getNum(maxilar["21"]) + getNum(maxilar["22"]) + getNum(maxilar["23"]);
+  
+  const sum6Mand = getNum(mandibula["43"]) + getNum(mandibula["42"]) + getNum(mandibula["41"]) + 
+                   getNum(mandibula["31"]) + getNum(mandibula["32"]) + getNum(mandibula["33"]);
+
+  const boltonAnteriorVal = sum6Max > 0 ? (sum6Mand / sum6Max) * 100 : 0;
+  const boltonTotalVal = sum12Max > 0 ? (sum12Mand / sum12Max) * 100 : 0;
+
+  const boltonAnterior = isNaN(boltonAnteriorVal) ? "0.0" : boltonAnteriorVal.toFixed(1);
+  const boltonTotal = isNaN(boltonTotalVal) ? "0.0" : boltonTotalVal.toFixed(1);
+
+  const difAnt = boltonAnteriorVal - 77.2;
+  const diagAnt = difAnt > 0 ? 'Aumentado: Exceso inferior' : 'Disminuido: Exceso superior';
+  const difTot = boltonTotalVal - 91.2;
+  const diagTot = difTot > 0 ? 'Aumentado: Exceso inferior' : 'Disminuido: Exceso superior';
+
+  const sii = getNum(mandibula["42"]) + getNum(mandibula["41"]) + getNum(mandibula["31"]) + getNum(mandibula["32"]); 
+  const tanakaSup = (sii / 2) + 11; 
+  const tanakaInf = (sii / 2) + 10.5;
+
+  const analisisDentario = {
+    sum12Max, sum12Mand, sum6Max, sum6Mand,
+    boltonAnterior, boltonTotal,
+    diagAnt, diagTot,
+    sii, 
+    tanakaSup: isNaN(tanakaSup) ? "0.0" : tanakaSup.toFixed(1), 
+    tanakaInf: isNaN(tanakaInf) ? "0.0" : tanakaInf.toFixed(1)
+  };
+
+  const edadRaw = getNum(vertData.edad);
+  const edadCalculo = Math.min(Math.max(edadRaw, 9), 19);
+  const difEdad = edadCalculo - 9;
+
+  const normas = {
+    ejeFacial: { base: 90, varAnual: 0, ds: 3, reverseSign: false },
+    profunFacial: { base: 87, varAnual: 0.3333333333333333, ds: 3, reverseSign: false },
+    anguloPM: { base: 26, varAnual: -0.3, ds: 4, reverseSign: true }, 
+    altFacialInf: { base: 47, varAnual: 0, ds: 4, reverseSign: true }, 
+    arcoMandibular: { base: 26, varAnual: 0.5, ds: 4, reverseSign: false }
+  };
+
+  const variables = ['ejeFacial', 'profunFacial', 'anguloPM', 'altFacialInf', 'arcoMandibular'];
+  let vertSum = 0;
+  const detalles = {};
+
+  variables.forEach(v => {
+    const normaEdad = normas[v].base + (difEdad * normas[v].varAnual);
+    const valPcte = getNum(vertData[v]);
     
-    const sum6Mand = getNum(mandibula["43"]) + getNum(mandibula["42"]) + getNum(mandibula["41"]) + 
-                     getNum(mandibula["31"]) + getNum(mandibula["32"]) + getNum(mandibula["33"]);
+    let desvio = normas[v].reverseSign 
+      ? (normaEdad - valPcte) / normas[v].ds 
+      : (valPcte - normaEdad) / normas[v].ds;
 
-    // Cálculos Bolton
-    const boltonAnteriorVal = sum6Max > 0 ? (sum6Mand / sum6Max) * 100 : 0;
-    const boltonTotalVal = sum12Max > 0 ? (sum12Mand / sum12Max) * 100 : 0;
+    if (isNaN(desvio)) desvio = 0;
 
-    const boltonAnterior = isNaN(boltonAnteriorVal) ? "0.0" : boltonAnteriorVal.toFixed(1);
-    const boltonTotal = isNaN(boltonTotalVal) ? "0.0" : boltonTotalVal.toFixed(1);
+    detalles[v] = { normaEdad, ds: normas[v].ds, valorSigno: desvio };
+    vertSum += desvio;
+  });
 
-    // Diagnósticos Bolton
-    const difAnt = boltonAnteriorVal - 77.2;
-    const diagAnt = difAnt > 0 ? 'Aumentado: Exceso inferior' : 'Disminuido: Exceso superior';
-    const difTot = boltonTotalVal - 91.2;
-    const diagTot = difTot > 0 ? 'Aumentado: Exceso inferior' : 'Disminuido: Exceso superior';
+  const vertTotalVal = vertSum / 5;
+  const vertTotal = isNaN(vertTotalVal) ? "0.00" : vertTotalVal.toFixed(2);
+  
+  let biotipo = "";
+  const vt = parseFloat(vertTotal);
+  if (isNaN(vt)) biotipo = "Mesofacial";
+  else if (vt >= 1) biotipo = "Braquifacial Severo";
+  else if (vt >= 0.5) biotipo = "Braquifacial";
+  else if (vt >= -0.5) biotipo = "Mesofacial";
+  else if (vt >= -1.5) biotipo = "Dolicofacial";
+  else biotipo = "Dolicofacial Severo";
 
-    // Tanaka - Johnston (Suma de los 4 incisivos inferiores)
-    const sii = getNum(mandibula["42"]) + getNum(mandibula["41"]) + getNum(mandibula["31"]) + getNum(mandibula["32"]); 
-    const tanakaSup = (sii / 2) + 11; 
-    const tanakaInf = (sii / 2) + 10.5; 
-
-    return {
-      sum12Max, sum12Mand, sum6Max, sum6Mand,
-      boltonAnterior, boltonTotal,
-      diagAnt, diagTot,
-      sii, 
-      tanakaSup: isNaN(tanakaSup) ? "0.0" : tanakaSup.toFixed(1), 
-      tanakaInf: isNaN(tanakaInf) ? "0.0" : tanakaInf.toFixed(1)
-    };
-  }, [maxilar, mandibula]);
-
-  const analisisVert = useMemo(() => {
-    const edadRaw = getNum(vertData.edad);
-    const edadCalculo = Math.min(Math.max(edadRaw, 9), 19); // Máximo 19, Mínimo 9
-    const difEdad = edadCalculo - 9;
-
-    const normas = {
-      ejeFacial: { base: 90, varAnual: 0, ds: 3, reverseSign: false },
-      profunFacial: { base: 87, varAnual: 0.3333333333333333, ds: 3, reverseSign: false },
-      anguloPM: { base: 26, varAnual: -0.3, ds: 4, reverseSign: true }, 
-      altFacialInf: { base: 47, varAnual: 0, ds: 4, reverseSign: true }, 
-      arcoMandibular: { base: 26, varAnual: 0.5, ds: 4, reverseSign: false }
-    };
-
-    const variables = ['ejeFacial', 'profunFacial', 'anguloPM', 'altFacialInf', 'arcoMandibular'];
-    let vertSum = 0;
-    const detalles = {};
-
-    variables.forEach(v => {
-      const normaEdad = normas[v].base + (difEdad * normas[v].varAnual);
-      const valPcte = getNum(vertData[v]);
-      
-      let desvio = normas[v].reverseSign 
-        ? (normaEdad - valPcte) / normas[v].ds 
-        : (valPcte - normaEdad) / normas[v].ds;
-
-      if (isNaN(desvio)) desvio = 0;
-
-      detalles[v] = { normaEdad, ds: normas[v].ds, valorSigno: desvio };
-      vertSum += desvio;
-    });
-
-    const vertTotalVal = vertSum / 5;
-    const vertTotal = isNaN(vertTotalVal) ? "0.00" : vertTotalVal.toFixed(2);
-    
-    let biotipo = "";
-    const vt = parseFloat(vertTotal);
-    if (isNaN(vt)) biotipo = "Mesofacial";
-    else if (vt >= 1) biotipo = "Braquifacial Severo";
-    else if (vt >= 0.5) biotipo = "Braquifacial";
-    else if (vt >= -0.5) biotipo = "Mesofacial";
-    else if (vt >= -1.5) biotipo = "Dolicofacial";
-    else biotipo = "Dolicofacial Severo";
-
-    return { edadCalculo, difEdad, detalles, vertTotal, biotipo };
-  }, [vertData]);
+  const analisisVert = { edadCalculo, difEdad, detalles, vertTotal, biotipo };
 
   const handleTeethChange = (arch, tooth, value) => {
     const toothKey = String(tooth);
@@ -396,9 +381,9 @@ export default function OrtodonciaApp() {
                   <div>
                     <div className="flex justify-between items-end">
                       <p className="text-sm font-medium text-slate-500">Anterior (6 a 6)</p>
-                      <p className="text-2xl font-black text-indigo-600">{analisisDentario.boltonAnterior}%</p>
+                      <p className="text-2xl font-black text-indigo-600">{analisisDentario.boltonAnterior} %</p>
                     </div>
-                    <p className="text-xs text-slate-400 mt-1">Norma: 77.2% | Sumas: M={analisisDentario.sum6Max} m={analisisDentario.sum6Mand}</p>
+                    <p className="text-xs text-slate-400 mt-1">Norma: 77,2% | Sumas: M= {analisisDentario.sum6Max} m= {analisisDentario.sum6Mand}</p>
                     <div className={`mt-2 p-2 rounded text-sm font-medium ${parseFloat(analisisDentario.boltonAnterior) > 77.2 ? 'bg-rose-50 text-rose-700' : 'bg-sky-50 text-sky-700'}`}>
                       {analisisDentario.diagAnt}
                     </div>
@@ -406,9 +391,9 @@ export default function OrtodonciaApp() {
                   <div className="pt-4 border-t border-slate-100">
                     <div className="flex justify-between items-end">
                       <p className="text-sm font-medium text-slate-500">Total (12 a 12)</p>
-                      <p className="text-2xl font-black text-indigo-600">{analisisDentario.boltonTotal}%</p>
+                      <p className="text-2xl font-black text-indigo-600">{analisisDentario.boltonTotal} %</p>
                     </div>
-                    <p className="text-xs text-slate-400 mt-1">Norma: 91.2% | Sumas: M={analisisDentario.sum12Max} m={analisisDentario.sum12Mand}</p>
+                    <p className="text-xs text-slate-400 mt-1">Norma: 91,2% | Sumas: M= {analisisDentario.sum12Max} m= {analisisDentario.sum12Mand}</p>
                     <div className={`mt-2 p-2 rounded text-sm font-medium ${parseFloat(analisisDentario.boltonTotal) > 91.2 ? 'bg-rose-50 text-rose-700' : 'bg-sky-50 text-sky-700'}`}>
                       {analisisDentario.diagTot}
                     </div>
@@ -493,7 +478,6 @@ export default function OrtodonciaApp() {
                         <th className="px-4 py-3 whitespace-nowrap">Factor</th>
                         <th className="px-4 py-3">Norma Base (9a)</th>
                         <th className="px-4 py-3">D.S.</th>
-                        {/* Título de la norma dinámico con resaltado visual */}
                         <th className="px-4 py-3 bg-indigo-50/70 text-indigo-900 font-bold border-x border-indigo-100">
                           Norma ({analisisVert.edadCalculo}a)
                         </th>
@@ -522,7 +506,6 @@ export default function OrtodonciaApp() {
                             <td className="px-4 py-3 text-slate-500">{baseNorms[v]?.base ?? '-'}</td>
                             <td className="px-4 py-3 text-slate-500">{baseNorms[v]?.ds ?? '-'}</td>
                             
-                            {/* Valor Ajustado Dinámicamente para la Edad */}
                             <td className="px-4 py-3 font-bold text-indigo-900 bg-indigo-50/40 border-x border-indigo-100">
                               {normaEdadFormatted}
                             </td>
