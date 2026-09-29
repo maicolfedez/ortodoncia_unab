@@ -1,10 +1,12 @@
 'use client';
+
 import React, { useState, useRef, useEffect } from 'react';
 
+// Tooth quadrant keys for 12 maxillary and 12 mandibular teeth
 const TEETH_MAX_KEYS = ["16", "15", "14", "13", "12", "11", "21", "22", "23", "24", "25", "26"];
 const TEETH_MAND_KEYS = ["46", "45", "44", "43", "42", "41", "31", "32", "33", "34", "35", "36"];
 
-// Helper ultra-robusto para convertir textos a números
+// Robust helper to sanitize string inputs to floating point numbers
 const getNum = (val) => {
   if (val === null || val === undefined) return 0;
   const str = String(val).trim().replace(',', '.');
@@ -13,6 +15,7 @@ const getNum = (val) => {
   return isNaN(num) ? 0 : num;
 };
 
+// Calculate Bolton anterior/total ratios and Tanaka-Johnston space requirements
 const calculateDentario = (maxInputs, mandInputs) => {
   const sum12MaxRaw = TEETH_MAX_KEYS.reduce((acc, key) => acc + getNum(maxInputs[key]), 0);
   const sum12MandRaw = TEETH_MAND_KEYS.reduce((acc, key) => acc + getNum(mandInputs[key]), 0);
@@ -35,9 +38,9 @@ const calculateDentario = (maxInputs, mandInputs) => {
   const boltonTotal = isNaN(boltonTotalVal) ? "0.0" : boltonTotalVal.toFixed(1);
 
   const difAnt = boltonAnteriorVal - 77.2;
-  const diagAnt = difAnt > 0 ? 'Aumentado: Exceso inferior' : 'Disminuido: Exceso superior';
+  const diagAnt = boltonAnteriorVal === 0 ? 'Sin datos suficientes' : difAnt > 0 ? 'Aumentado: Exceso inferior' : 'Disminuido: Exceso superior';
   const difTot = boltonTotalVal - 91.2;
-  const diagTot = difTot > 0 ? 'Aumentado: Exceso inferior' : 'Disminuido: Exceso superior';
+  const diagTot = boltonTotalVal === 0 ? 'Sin datos suficientes' : difTot > 0 ? 'Aumentado: Exceso inferior' : 'Disminuido: Exceso superior';
 
   const siiRaw = getNum(mandInputs["42"]) + getNum(mandInputs["41"]) + getNum(mandInputs["31"]) + getNum(mandInputs["32"]); 
   const sii = Number(siiRaw.toFixed(1));
@@ -54,202 +57,289 @@ const calculateDentario = (maxInputs, mandInputs) => {
   };
 };
 
-const calculateVert = (vData) => {
-  const edadNum = getNum(vData.edad);
-  const edadCalculo = edadNum > 0 ? edadNum : 9;
-  const difEdad = edadCalculo - 9;
+// Calculate Ricketts VERT Index and facial biotype
+const calculateVert = (vertData) => {
+  const edadNum = Math.min(19, Math.max(1, getNum(vertData.edad) || 9));
+  const diffEdad = edadNum - 9;
 
-  const baseNorms = {
-    ejeFacial: { base: 90, ds: 3, ageFactor: 0 },
-    profunFacial: { base: 87, ds: 3, ageFactor: 1 / 3 },
-    anguloPM: { base: 26, ds: 4, ageFactor: -1 / 3 },
-    altFacialInf: { base: 47, ds: 4, ageFactor: 0 },
-    arcoMandibular: { base: 26, ds: 4, ageFactor: 1 / 3 }
+  const factors = {
+    ejeFacial: {
+      label: 'Eje Facial',
+      baseNorma: 90,
+      ds: 3,
+      calcNorma: () => 90,
+      calcDesvio: (val, norma, ds) => (val - norma) / ds
+    },
+    profunFacial: {
+      label: 'Profun. Facial',
+      baseNorma: 87,
+      ds: 3,
+      calcNorma: (diff) => 87 + (diff * (1 / 3)),
+      calcDesvio: (val, norma, ds) => (val - norma) / ds
+    },
+    anguloPM: {
+      label: 'Ángulo del PM',
+      baseNorma: 26,
+      ds: 4,
+      calcNorma: (diff) => 26 - (diff * (1 / 3)),
+      calcDesvio: (val, norma, ds) => (norma - val) / ds
+    },
+    altFacialInf: {
+      label: 'Alt. Facial Inf.',
+      baseNorma: 47,
+      ds: 4,
+      calcNorma: () => 47,
+      calcDesvio: (val, norma, ds) => (norma - val) / ds
+    },
+    arcoMandibular: {
+      label: 'Arco Mandibular',
+      baseNorma: 26,
+      ds: 4,
+      calcNorma: (diff) => 26 + (diff * 0.5),
+      calcDesvio: (val, norma, ds) => (val - norma) / ds
+    }
   };
 
-  let sumDeviations = 0;
+  let sumDesvios = 0;
   const detalles = {};
 
-  Object.keys(baseNorms).forEach((key) => {
-    const { base, ds, ageFactor } = baseNorms[key];
-    const normaEdad = base + (difEdad * ageFactor);
-    const pacienteVal = getNum(vData[key]);
-
-    let dev = 0;
-    if (key === 'anguloPM' || key === 'altFacialInf') {
-      dev = (normaEdad - pacienteVal) / ds;
-    } else {
-      dev = (pacienteVal - normaEdad) / ds;
-    }
+  Object.keys(factors).forEach((key) => {
+    const f = factors[key];
+    const val = getNum(vertData[key]);
+    const normaEdad = f.calcNorma(diffEdad);
+    const valorSigno = f.calcDesvio(val, normaEdad, f.ds);
 
     detalles[key] = {
-      normaEdad,
-      ds,
-      valorSigno: dev
+      normaEdad: Number(normaEdad.toFixed(1)),
+      ds: f.ds,
+      valorSigno: Number(valorSigno.toFixed(2))
     };
-
-    sumDeviations += dev;
+    sumDesvios += valorSigno;
   });
 
-  const vertVal = sumDeviations / 5;
-  const vertTotal = vertVal.toFixed(2);
+  const vertTotalVal = sumDesvios / 5;
+  const vertTotal = isNaN(vertTotalVal) ? '0.00' : vertTotalVal.toFixed(2);
 
   let biotipo = 'Mesofacial';
-  if (vertVal < -1.5) biotipo = 'Dolicofacial Severo';
-  else if (vertVal < -0.5) biotipo = 'Dolicofacial';
-  else if (vertVal <= 0.5) biotipo = 'Mesofacial';
-  else if (vertVal <= 1.5) biotipo = 'Braquifacial';
+  const v = parseFloat(vertTotal);
+  if (v <= -2.0) biotipo = 'Dolicofacial Severo';
+  else if (v <= -0.5) biotipo = 'Dolicofacial';
+  else if (v < 0.5) biotipo = 'Mesofacial';
+  else if (v < 2.0) biotipo = 'Braquifacial';
   else biotipo = 'Braquifacial Severo';
 
   return {
-    edadCalculo,
-    difEdad,
-    detalles,
+    edadCalculo: edadNum,
     vertTotal,
-    biotipo
+    biotipo,
+    detalles
   };
 };
 
-function TollaroTab() {
-  const [imageSrc, setImageSrc] = useState('https://lh3.googleusercontent.com/d/1AFFQRm-hgrInhR0qINq310luVxI1mxiM');
-  const [imgError, setImgError] = useState(false);
-  const [imgLoaded, setImgLoaded] = useState(false);
-  
+function TollaroTab({ vertData }) {
+  const [useCustomImage, setUseCustomImage] = useState(false);
+  const [imageSrc, setImageSrc] = useState(null);
   const [frameRelY, setFrameRelY] = useState(0.5);
-  const [markersRelY, setMarkersRelY] = useState([0.1, 0.1, 0.1, 0.1, 0.1]);
+  const [markersRelY, setMarkersRelY] = useState([0.3, 0.4, 0.5, 0.4, 0.3]);
+  const [draggingTarget, setDraggingTarget] = useState(null);
 
-  const imageRef = useRef(null);
-  const [draggingIdx, setDraggingIdx] = useState(null);
-
-  const handlePointerDown = (e, target) => {
-    setDraggingIdx(target);
-  };
+  const containerRef = useRef(null);
 
   useEffect(() => {
-    const handlePointerMove = (e) => {
-      if (draggingIdx === null || !imageRef.current) return;
-      
-      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-      const rect = imageRef.current.getBoundingClientRect();
-      
-      let relY = (clientY - rect.top) / rect.height;
-      relY = Math.max(0, Math.min(1, relY));
+    if (!vertData) return;
+    const factorNorms = [
+      { key: 'ejeFacial', min: 78, max: 102 },
+      { key: 'profunFacial', min: 75, max: 99 },
+      { key: 'anguloPM', min: 38, max: 14 },
+      { key: 'altFacialInf', min: 59, max: 35 },
+      { key: 'arcoMandibular', min: 14, max: 38 }
+    ];
 
-      if (draggingIdx === 'frame') {
-        setFrameRelY(relY);
-      } else {
-        setMarkersRelY(prev => {
-          const next = [...prev];
-          next[draggingIdx] = relY;
-          return next;
-        });
-      }
-    };
+    const newRelY = factorNorms.map(({ key, min, max }) => {
+      const val = getNum(vertData[key]);
+      if (!val) return 0.5;
+      const pct = (val - min) / (max - min);
+      return Math.max(0.05, Math.min(0.95, 1 - pct));
+    });
 
-    const handlePointerUp = () => setDraggingIdx(null);
+    setMarkersRelY(newRelY);
+  }, [vertData]);
 
-    if (draggingIdx !== null) {
-      window.addEventListener('mousemove', handlePointerMove);
-      window.addEventListener('mouseup', handlePointerUp);
-      window.addEventListener('touchmove', handlePointerMove, { passive: true });
-      window.addEventListener('touchend', handlePointerUp);
+  const handlePointerDown = (e, target) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch (err) {
+      // Fallback if capture is unsupported
     }
+    setDraggingTarget(target);
+  };
 
-    return () => {
-      window.removeEventListener('mousemove', handlePointerMove);
-      window.removeEventListener('mouseup', handlePointerUp);
-      window.removeEventListener('touchmove', handlePointerMove);
-      window.removeEventListener('touchend', handlePointerUp);
-    };
-  }, [draggingIdx]);
+  const handlePointerMove = (e) => {
+    if (draggingTarget === null || !containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    let relY = (e.clientY - rect.top) / rect.height;
+    relY = Math.max(0.02, Math.min(0.98, relY));
+
+    if (draggingTarget === 'frame') {
+      setFrameRelY(relY);
+    } else if (typeof draggingTarget === 'number') {
+      setMarkersRelY((prev) => {
+        const next = [...prev];
+        next[draggingTarget] = relY;
+        return next;
+      });
+    }
+  };
+
+  const handlePointerUp = (e) => {
+    try {
+      if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      }
+    } catch (err) {}
+    setDraggingTarget(null);
+  };
 
   const handleFileUpload = (e) => {
-    const file = e.target.files[0];
+    const file = e.target.files && e.target.files[0];
     if (file) {
       const reader = new FileReader();
       reader.onload = (ev) => {
         setImageSrc(ev.target.result);
-        setImgError(false);
+        setUseCustomImage(true);
       };
       reader.readAsDataURL(file);
     }
   };
 
-  const currentPixelY = imageRef.current && imageRef.current.naturalHeight && imgLoaded
-    ? Math.round(frameRelY * imageRef.current.naturalHeight) 
+  const currentPixelY = containerRef.current
+    ? Math.round(frameRelY * containerRef.current.clientHeight)
     : 0;
+
+  const columns = [
+    { name: 'Eje Facial', label: 'E.F.', norm: '90° ±3°' },
+    { name: 'Profun. Facial', label: 'P.F.', norm: '87° ±3°' },
+    { name: 'Ángulo PM', label: 'A.PM', norm: '26° ±4°' },
+    { name: 'Alt. Facial Inf.', label: 'A.F.I.', norm: '47° ±4°' },
+    { name: 'Arco Mandibular', label: 'A.M.', norm: '26° ±4°' }
+  ];
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden relative mt-6">
-      <div className="p-6 bg-slate-50 border-b border-slate-200">
-        <h2 className="text-blue-900 font-bold text-sm uppercase tracking-wider mb-3">Instrucciones de uso Tollaro</h2>
-        <ol className="space-y-2 text-slate-700 text-sm">
-          <li className="flex gap-2 items-center"><span className="flex-shrink-0 flex items-center justify-center w-5 h-5 bg-blue-600 text-white rounded-full font-bold text-[10px]">1</span><span>Realice la cefalometría para obtener los valores base.</span></li>
-          <li className="flex gap-2 items-center"><span className="flex-shrink-0 flex items-center justify-center w-5 h-5 bg-blue-600 text-white rounded-full font-bold text-[10px]">2</span><span>Desplace los <b>puntos verdes</b> sobre los números obtenidos.</span></li>
-          <li className="flex gap-2 items-center"><span className="flex-shrink-0 flex items-center justify-center w-5 h-5 bg-blue-600 text-white rounded-full font-bold text-[10px]">3</span><span>Ajuste el <b>marco azul</b> hasta contener la mayor cantidad de puntos.</span></li>
-        </ol>
+      <div className="p-5 bg-slate-50 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-indigo-900 font-bold text-base uppercase tracking-wider mb-1">Plantilla Interactiva Tollaro</h2>
+          <p className="text-slate-600 text-xs">Arrastra los puntos verdes sobre los valores o desplaza el marco azul para encuadrar la tendencia facial.</p>
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setUseCustomImage(!useCustomImage)}
+            className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5"
+          >
+            {useCustomImage ? '📐 Usar Rejilla Vectorial' : '🖼️ Usar Imagen Personalizada'}
+          </button>
+
+          <label className="cursor-pointer bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold shadow-sm transition-colors flex items-center gap-1">
+            <span>📁 Subir Cefalometría</span>
+            <input type="file" accept="image/*" className="hidden" onChange={handleFileUpload} />
+          </label>
+        </div>
       </div>
 
-      <div className="bg-slate-900 p-3 text-white flex justify-between items-center relative z-40">
-        <div className="flex items-center gap-2 ml-2 text-blue-400">
-          <span className="text-[10px] font-bold uppercase tracking-widest">Área Interactiva</span>
+      <div className="bg-slate-900 px-4 py-2 text-white flex justify-between items-center relative z-40 text-xs">
+        <div className="flex items-center gap-2 text-indigo-300 font-medium">
+          <span>Modo: {useCustomImage ? 'Imagen Externa' : 'Gráfico Tollaro Vectorial'}</span>
         </div>
-        <div className="flex items-center gap-2 bg-slate-800 px-4 py-1.5 rounded-full border border-slate-700 shadow-inner">
-          <span className="text-[10px] text-slate-400 font-bold uppercase">Y:</span>
-          <span className="text-sm md:text-lg font-mono font-bold text-blue-400">{currentPixelY} px</span>
+        <div className="flex items-center gap-2 bg-slate-800 px-3 py-1 rounded-full border border-slate-700">
+          <span className="text-slate-400 font-bold uppercase text-[10px]">Posición Y:</span>
+          <span className="font-mono font-bold text-indigo-400">{currentPixelY} px ({Math.round(frameRelY * 100)}%)</span>
         </div>
       </div>
 
-      <div className="relative flex justify-center items-start min-h-[60vh] py-10 touch-none overflow-hidden bg-slate-100">
-        {imgError ? (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-50 z-40 p-6 text-center">
-            <h3 className="text-lg font-bold text-slate-700 mb-2">Imagen no disponible</h3>
-            <label className="cursor-pointer bg-blue-600 hover:bg-blue-700 transition-colors text-white px-6 py-2 rounded-lg font-semibold shadow-md">
-              Subir Imagen Manualmente
-              <input type="file" accept="image/*" className="hidden" onChange={handleFileUpload} />
-            </label>
-          </div>
+      <div
+        ref={containerRef}
+        className="relative w-full min-h-[500px] h-[60vh] max-h-[650px] bg-slate-900 select-none touch-none overflow-hidden flex justify-center items-center p-4"
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+      >
+        {useCustomImage && imageSrc ? (
+          <img
+            src={imageSrc}
+            alt="Cefalometría Tollaro"
+            className="absolute inset-0 w-full h-full object-contain pointer-events-none opacity-90"
+          />
         ) : (
-          <div className="relative w-full max-w-2xl mx-auto touch-none select-none px-4 md:px-0">
-            <img 
-              ref={imageRef}
-              src={imageSrc} 
-              alt="Tabla Tollaro" 
-              className="w-full h-auto border border-slate-300 shadow-sm pointer-events-none rounded bg-white"
-              onError={() => setImgError(true)}
-              onLoad={() => setImgLoaded(true)}
-            />
-
-            <div 
-              className="absolute border-2 border-blue-500 bg-blue-500/15 shadow-[0_0_15px_rgba(59,130,246,0.3)] z-30 cursor-grab active:cursor-grabbing flex items-center justify-center transition-opacity touch-none"
-              style={{
-                left: '1rem',
-                width: 'calc(100% - 2rem)',
-                height: '40%',
-                top: `${frameRelY * 100}%`,
-                transform: 'translateY(-50%)',
-                clipPath: 'polygon(0% 42%, 18% 42%, 18% 17%, 42% 17%, 42% 22.5%, 60% 22.5%, 60% 3%, 82% 3%, 82% 44%, 100% 44%, 100% 56%, 82% 56%, 82% 95%, 60% 95%, 60% 78%, 42% 78%, 42% 83%, 18% 83%, 18% 58%, 0% 58%)'
-              }}
-              onPointerDown={(e) => handlePointerDown(e, 'frame')}
-            >
-              <div className="w-full h-[2px] bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.9)] absolute top-1/2 -translate-y-1/2" />
+          <div className="absolute inset-0 w-full h-full bg-slate-950 p-6 flex flex-col justify-between pointer-events-none">
+            <div className="grid grid-cols-5 gap-2 text-center text-xs font-bold border-b border-slate-800 pb-2 z-10">
+              {columns.map((col, i) => (
+                <div key={i} className="text-slate-300">
+                  <div className="text-indigo-400 font-bold text-sm">{col.label}</div>
+                  <div className="text-[10px] text-slate-400 font-normal">{col.name}</div>
+                  <div className="text-[10px] text-emerald-400">{col.norm}</div>
+                </div>
+              ))}
             </div>
 
-            {markersRelY.map((relY, idx) => (
-              <div 
-                key={idx}
-                className="absolute w-6 h-6 md:w-8 md:h-8 bg-green-500/50 border-2 border-white/90 rounded-full cursor-ns-resize z-40 shadow-lg flex items-center justify-center hover:bg-green-500/80 transition-colors -translate-x-1/2 -translate-y-1/2 backdrop-blur-sm touch-none"
-                style={{
-                  left: `calc(1rem + ${(idx * 20) + 10}% - 0.2rem)`,
-                  top: `${relY * 100}%`
-                }}
-                onPointerDown={(e) => handlePointerDown(e, idx)}
-              >
-                <div className="w-1.5 h-1.5 md:w-2 md:h-2 bg-white rounded-full opacity-90 shadow-sm" />
+            <div className="relative flex-1 w-full my-2 border-x border-slate-800">
+              <div className="absolute top-[35%] bottom-[35%] left-0 right-0 bg-emerald-500/10 border-y border-emerald-500/30 flex items-center justify-end pr-2">
+                <span className="text-[10px] font-bold text-emerald-400/60 uppercase tracking-widest">Zona Mesofacial</span>
               </div>
-            ))}
+
+              <div className="absolute top-0 h-[35%] left-0 right-0 border-b border-sky-500/20 p-1">
+                <span className="text-[10px] font-bold text-sky-400/50 uppercase tracking-widest">Tendencia Braquifacial</span>
+              </div>
+
+              <div className="absolute bottom-0 h-[35%] left-0 right-0 border-t border-rose-500/20 p-1 flex items-end">
+                <span className="text-[10px] font-bold text-rose-400/50 uppercase tracking-widest">Tendencia Dolicofacial</span>
+              </div>
+
+              <div className="absolute inset-0 grid grid-cols-5 pointer-events-none">
+                {columns.map((_, i) => (
+                  <div key={i} className="border-r border-slate-800/80 last:border-r-0 h-full flex justify-center items-center">
+                    <div className="w-[1px] h-full bg-dashed bg-slate-800" />
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         )}
+
+        {/* Draggable Blue Tollaro Frame */}
+        <div
+          className="absolute border-2 border-blue-400 bg-blue-500/20 backdrop-blur-[1px] shadow-[0_0_20px_rgba(59,130,246,0.4)] z-30 cursor-grab active:cursor-grabbing flex items-center justify-center touch-none rounded-sm transition-shadow hover:border-blue-300"
+          style={{
+            left: '5%',
+            width: '90%',
+            height: '38%',
+            top: `${frameRelY * 100}%`,
+            transform: 'translateY(-50%)'
+          }}
+          onPointerDown={(e) => handlePointerDown(e, 'frame')}
+        >
+          <div className="w-full h-[2px] bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.9)] absolute top-1/2 -translate-y-1/2 pointer-events-none" />
+          <span className="text-[10px] font-bold uppercase tracking-widest text-blue-200 bg-blue-950/80 px-2 py-0.5 rounded border border-blue-500/40 pointer-events-none shadow-sm">
+            Marco Tollaro (Desplazar)
+          </span>
+        </div>
+
+        {/* Draggable Green Column Markers */}
+        {markersRelY.map((relY, idx) => (
+          <div
+            key={idx}
+            className="absolute w-7 h-7 md:w-8 md:h-8 bg-emerald-500 border-2 border-white rounded-full cursor-ns-resize z-40 shadow-[0_0_12px_rgba(16,185,129,0.8)] flex items-center justify-center hover:scale-110 active:scale-95 transition-transform -translate-x-1/2 -translate-y-1/2 touch-none"
+            style={{
+              left: `${idx * 20 + 10}%`,
+              top: `${relY * 100}%`
+            }}
+            onPointerDown={(e) => handlePointerDown(e, idx)}
+          >
+            <span className="text-[10px] font-bold text-slate-900 pointer-events-none">{idx + 1}</span>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -284,6 +374,15 @@ export default function OrtodonciaApp() {
   const [analisisDentario, setAnalisisDentario] = useState(() => calculateDentario(initialMaxilar, initialMandibula));
   const [analisisVert, setAnalisisVert] = useState(() => calculateVert(initialVertData));
 
+  // Auto-recalculate whenever maxillary, mandibular, or VERT data changes
+  useEffect(() => {
+    setAnalisisDentario(calculateDentario(maxilar, mandibula));
+  }, [maxilar, mandibula]);
+
+  useEffect(() => {
+    setAnalisisVert(calculateVert(vertData));
+  }, [vertData]);
+
   const handleCalcularDentario = (e) => {
     if (e) e.preventDefault();
     setAnalisisDentario(calculateDentario(maxilar, mandibula));
@@ -297,14 +396,14 @@ export default function OrtodonciaApp() {
   const handleTeethChange = (arch, tooth, value) => {
     const toothKey = String(tooth);
     if (arch === 'max') {
-      setMaxilar(prev => ({ ...prev, [toothKey]: value }));
+      setMaxilar((prev) => ({ ...prev, [toothKey]: value }));
     } else {
-      setMandibula(prev => ({ ...prev, [toothKey]: value }));
+      setMandibula((prev) => ({ ...prev, [toothKey]: value }));
     }
   };
 
   const handleVertChange = (field, value) => {
-    setVertData(prev => ({ ...prev, [field]: value }));
+    setVertData((prev) => ({ ...prev, [field]: value }));
   };
 
   const vertLabels = {
@@ -350,77 +449,68 @@ export default function OrtodonciaApp() {
           </div>
         </div>
 
+        {/* PESTAÑA MODELOS (Bolton y Tanaka) */}
         {}
         {activeTab === 'bolton' && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            
-            <div className="lg:col-span-8 space-y-6">
-              <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-200">
-                <div className="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                  <div>
-                    <h2 className="text-xl font-bold text-slate-800">Odontometría (mm)</h2>
-                    <p className="text-sm text-slate-500">Mide cada diente e ingresa el ancho mesiodistal.</p>
-                  </div>
-                  {/* Botón de calcular en la pestaña de modelos */}
-                  <button
-                    type="button"
-                    onClick={handleCalcularDentario}
-                    className="w-full sm:w-auto px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-bold rounded-xl shadow-md transition-all flex items-center justify-center gap-2 text-sm"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                    </svg>
-                    Calcular Bolton / Tanaka
-                  </button>
-                </div>
+            <div className="lg:col-span-8 bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-bold text-slate-800">Medidas Dentarias (mm)</h2>
+                <button
+                  type="button"
+                  onClick={handleCalcularDentario}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg text-sm transition-colors shadow-sm flex items-center gap-1.5"
+                >
+                  ⚡ Recalcular
+                </button>
+              </div>
 
-                {/* Maxilar */}
-                <div className="mb-8 overflow-x-auto pb-2 custom-scrollbar">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="font-semibold text-indigo-900 bg-indigo-50 px-2 py-1 rounded">Maxilar</span>
-                  </div>
-                  <div className="flex justify-between gap-1 min-w-max">
-                    {[16, 15, 14, 13, 12, 11, 21, 22, 23, 24, 25, 26].map(tooth => (
-                      <div key={tooth} className="flex flex-col items-center">
-                        <label className="text-xs text-slate-400 mb-1">{tooth}</label>
-                        <input 
-                          type="text"
-                          inputMode="decimal"
-                          value={maxilar[String(tooth)] ?? ''} 
-                          onChange={(e) => handleTeethChange('max', tooth, e.target.value)}
-                          className={`w-12 h-12 text-center rounded border-2 font-semibold focus:border-indigo-500 focus:ring-0 transition-colors
-                            ${[13,12,11,21,22,23].includes(tooth) ? 'bg-blue-50 border-blue-200 text-blue-900' : 'bg-slate-50 border-slate-200 text-slate-700'}`}
-                        />
-                      </div>
-                    ))}
-                  </div>
+              {/* Maxilar */}
+              <div className="mb-8 overflow-x-auto pb-2 custom-scrollbar">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="font-semibold text-indigo-900 bg-indigo-50 px-2 py-1 rounded">Maxilar</span>
                 </div>
+                <div className="flex justify-between gap-1 min-w-max">
+                  {TEETH_MAX_KEYS.map((tooth) => (
+                    <div key={tooth} className="flex flex-col items-center">
+                      <label className="text-xs text-slate-400 mb-1">{tooth}</label>
+                      <input 
+                        type="text"
+                        inputMode="decimal"
+                        value={maxilar[tooth] ?? ''} 
+                        onChange={(e) => handleTeethChange('max', tooth, e.target.value)}
+                        className={`w-12 h-12 text-center rounded border-2 font-semibold focus:border-indigo-500 focus:ring-0 transition-colors
+                          ${["13","12","11","21","22","23"].includes(tooth) ? 'bg-blue-50 border-blue-200 text-blue-900' : 'bg-slate-50 border-slate-200 text-slate-700'}`}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
 
-                {/* Mandíbula */}
-                <div className="overflow-x-auto pb-2 custom-scrollbar">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="font-semibold text-emerald-900 bg-emerald-50 px-2 py-1 rounded">Mandíbula</span>
-                  </div>
-                  <div className="flex justify-between gap-1 min-w-max">
-                    {[46, 45, 44, 43, 42, 41, 31, 32, 33, 34, 35, 36].map(tooth => (
-                      <div key={tooth} className="flex flex-col items-center">
-                        <input 
-                          type="text"
-                          inputMode="decimal"
-                          value={mandibula[String(tooth)] ?? ''} 
-                          onChange={(e) => handleTeethChange('mand', tooth, e.target.value)}
-                          className={`w-12 h-12 text-center rounded border-2 font-semibold focus:border-indigo-500 focus:ring-0 transition-colors
-                            ${[43,42,41,31,32,33].includes(tooth) ? 'bg-blue-50 border-blue-200 text-blue-900' : 'bg-slate-50 border-slate-200 text-slate-700'}`}
-                        />
-                        <label className="text-xs text-slate-400 mt-1">{tooth}</label>
-                      </div>
-                    ))}
-                  </div>
+              {/* Mandíbula */}
+              <div className="overflow-x-auto pb-2 custom-scrollbar">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="font-semibold text-emerald-900 bg-emerald-50 px-2 py-1 rounded">Mandíbula</span>
+                </div>
+                <div className="flex justify-between gap-1 min-w-max">
+                  {TEETH_MAND_KEYS.map((tooth) => (
+                    <div key={tooth} className="flex flex-col items-center">
+                      <input 
+                        type="text"
+                        inputMode="decimal"
+                        value={mandibula[tooth] ?? ''} 
+                        onChange={(e) => handleTeethChange('mand', tooth, e.target.value)}
+                        className={`w-12 h-12 text-center rounded border-2 font-semibold focus:border-indigo-500 focus:ring-0 transition-colors
+                          ${["43","42","41","31","32","33"].includes(tooth) ? 'bg-blue-50 border-blue-200 text-blue-900' : 'bg-slate-50 border-slate-200 text-slate-700'}`}
+                      />
+                      <label className="text-xs text-slate-400 mt-1">{tooth}</label>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
 
-            {}
+            {/* Panel lateral con Resultados */}
             <div className="lg:col-span-4 space-y-6">
               {/* Resultados Bolton */}
               <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 border-t-4 border-t-indigo-500">
@@ -471,6 +561,7 @@ export default function OrtodonciaApp() {
           </div>
         )}
 
+        {/* PESTAÑA VERT */}
         {}
         {activeTab === 'vert' && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -491,7 +582,7 @@ export default function OrtodonciaApp() {
                     />
                   </div>
 
-                  {Object.keys(vertLabels).map(key => (
+                  {Object.keys(vertLabels).map((key) => (
                     <div key={key} className="flex justify-between items-center gap-4">
                       <label className="text-sm font-medium text-slate-600">{vertLabels[key]}</label>
                       <input 
@@ -506,7 +597,7 @@ export default function OrtodonciaApp() {
                 </div>
               </div>
 
-              {/* Botón de calcular en la pestaña de VERT */}
+              {/* Botón de calcular VERT */}
               <button
                 type="button"
                 onClick={handleCalcularVert}
@@ -522,7 +613,7 @@ export default function OrtodonciaApp() {
             <div className="lg:col-span-8 flex flex-col gap-6">
               <div className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-200 flex flex-col items-center text-center">
                 <p className="text-slate-500 font-medium mb-2">Índice VERT (Ricketts)</p>
-                <h1 className={`text-5xl md:text-6xl font-black tracking-tighter mb-4 ${parseFloat(analisisVert.vertTotal) > 0 ? 'text-sky-600' : 'text-rose-600'}`}>
+                <h1 className={`text-5xl md:text-6xl font-black tracking-tighter mb-4 ${parseFloat(analisisVert.vertTotal) >= 0 ? 'text-sky-600' : 'text-rose-600'}`}>
                   {analisisVert.vertTotal}
                 </h1>
                 <div className="inline-block bg-slate-900 text-white px-6 py-2 rounded-full font-bold text-lg md:text-xl">
@@ -585,7 +676,8 @@ export default function OrtodonciaApp() {
         )}
 
         {/* PESTAÑA TOLLARO */}
-        {activeTab === 'tollaro' && <TollaroTab />}
+        {}
+        {activeTab === 'tollaro' && <TollaroTab vertData={vertData} />}
 
       </div>
     </div>
