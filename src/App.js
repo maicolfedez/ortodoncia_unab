@@ -368,24 +368,25 @@ export default function OrtodonciaApp() {
   const [maxilar, setMaxilar] = useState(initialMaxilar);
   const [mandibula, setMandibula] = useState(initialMandibula);
   const [vertData, setVertData] = useState(initialVertData);
+  const analisisDentario = calculateDentario(maxilar, mandibula);
 
   const [activeTab, setActiveTab] = useState('bolton');
 
-  const [analisisDentario, setAnalisisDentario] = useState(() => calculateDentario(initialMaxilar, initialMandibula));
+  //const [analisisDentario, setAnalisisDentario] = useState(() => calculateDentario(initialMaxilar, initialMandibula));
   const [analisisVert, setAnalisisVert] = useState(() => calculateVert(initialVertData));
 
   // Auto-recalculate whenever maxillary, mandibular, or VERT data changes
-  useEffect(() => {
-    setAnalisisDentario(calculateDentario(maxilar, mandibula));
-  }, [maxilar, mandibula]);
+  //useEffect(() => {
+   // setAnalisisDentario(calculateDentario(maxilar, mandibula));
+ // }, [maxilar, mandibula]);
 
   useEffect(() => {
     setAnalisisVert(calculateVert(vertData));
   }, [vertData]);
 
-  const handleCalcularDentario = (e) => {
-    if (e) e.preventDefault();
-    setAnalisisDentario(calculateDentario(maxilar, mandibula));
+  //const handleCalcularDentario = (e) => {
+    //if (e) e.preventDefault();
+    //setAnalisisDentario(calculateDentario(maxilar, mandibula));
   };
 
   const handleCalcularVert = (e) => {
@@ -456,13 +457,13 @@ export default function OrtodonciaApp() {
             <div className="lg:col-span-8 bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200">
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-xl font-bold text-slate-800">Medidas Dentarias (mm)</h2>
-                <button
-                  type="button"
-                  onClick={handleCalcularDentario}
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg text-sm transition-colors shadow-sm flex items-center gap-1.5"
-                >
-                  ⚡ Recalcular
-                </button>
+                //<button
+                  //type="button"
+                  //onClick={handleCalcularDentario}
+                  //className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg text-sm transition-colors shadow-sm flex items-center gap-1.5"
+                //>
+                 // ⚡ Recalcular
+                //</button>
               </div>
 
               {/* Maxilar */}
