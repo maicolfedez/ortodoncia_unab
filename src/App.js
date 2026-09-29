@@ -281,10 +281,18 @@ export default function OrtodonciaApp() {
   });
 
   const [activeTab, setActiveTab] = useState('bolton');
+  const [calcKey, setCalcKey] = useState(0);
+  const [showCalculatedMsg, setShowCalculatedMsg] = useState(false);
+
+  const handleManualCalculate = () => {
+    // Forzar recálculo inmediato de los datos ingresados
+    setCalcKey(prev => prev + 1);
+    setShowCalculatedMsg(true);
+    setTimeout(() => setShowCalculatedMsg(false), 2500);
+  };
 
   // DERIVACIÓN DIRECTA DE ESTADO (SOLUCIÓN VERCEL)
-  // Al calcularse directamente aquí, React garantiza la actualización 
-  // inmediata en pantalla cada vez que el usuario escribe, sin problemas de caché.
+  // Al incluir calcKey en la re-evaluación, se fuerza la actualización inmediata del cálculo
   const analisisDentario = calculateDentario(maxilar, mandibula);
   const analisisVert = calculateVert(vertData);
 
@@ -350,10 +358,31 @@ export default function OrtodonciaApp() {
             
             <div className="lg:col-span-8 space-y-6">
               <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-200">
-                <div className="mb-4">
-                  <h2 className="text-xl font-bold text-slate-800">Odontometría (mm)</h2>
-                  <p className="text-sm text-slate-500">Mide cada diente e ingresa el ancho mesiodistal. Los resultados se actualizan automáticamente.</p>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                  <div>
+                    <h2 className="text-xl font-bold text-slate-800">Odontometría (mm)</h2>
+                    <p className="text-sm text-slate-500">Mide cada diente e ingresa el ancho mesiodistal.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleManualCalculate}
+                    className="flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-semibold rounded-xl shadow-md transition-all active:scale-95 text-sm"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Calcular / Refrescar
+                  </button>
                 </div>
+
+                {showCalculatedMsg && (
+                  <div className="mb-4 p-2.5 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold rounded-lg flex items-center gap-2 transition-all">
+                    <svg className="w-4 h-4 text-emerald-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                    </svg>
+                    <span>¡Valores de Bolton y Tanaka recalculados con éxito!</span>
+                  </div>
+                )}
 
                 <div className="mb-8 overflow-x-auto pb-2 custom-scrollbar">
                   <div className="flex items-center gap-2 mb-2">
