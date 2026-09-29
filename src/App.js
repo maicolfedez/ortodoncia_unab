@@ -468,7 +468,7 @@ export default function OrtodonciaApp() {
                     <p className="text-xs text-slate-400 mt-1">Norma: 91,2% | Sumas: M= {analisisDentario.sum12Max} m= {analisisDentario.sum12Mand}</p>
                     <div className={`mt-2 p-2 rounded text-sm flex flex-col font-medium ${parseFloat(analisisDentario.boltonTotal) > 91.2 ? 'bg-rose-50 text-rose-700' : parseFloat(analisisDentario.boltonTotal) > 0 ? 'bg-sky-50 text-sky-700' : 'bg-slate-100 text-slate-500'}`}>
                       <span>{analisisDentario.diagTot}</span>
-                      {analisisDentario.diagTot !== 'Normal' && analisisDentario.excesoTotMm !== "0.0" && (
+                      {analisisDentario.diagTot !== 'Normal' && analisisDentario.excesoTotMm !== analisisDentario.excesoTotMm && (
                         <span className="font-bold">Magnitud: {analisisDentario.excesoTotMm} mm</span>
                       )}
                     </div>
