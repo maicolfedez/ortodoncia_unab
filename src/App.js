@@ -183,15 +183,20 @@ export default function OrtodonciaApp() {
 
   const [activeTab, setActiveTab] = useState('bolton');
 
-  // Direct calculations on every single render cycle - no useMemo caching bugs in Vercel
-  const sum12Max = TEETH_MAX_KEYS.reduce((acc, key) => acc + getNum(maxilar[key]), 0);
-  const sum12Mand = TEETH_MAND_KEYS.reduce((acc, key) => acc + getNum(mandibula[key]), 0);
+  // Direct recalculations on every render - guaranteed reactivity in Next.js / Vercel
+  const sum12MaxRaw = TEETH_MAX_KEYS.reduce((acc, key) => acc + getNum(maxilar[key]), 0);
+  const sum12MandRaw = TEETH_MAND_KEYS.reduce((acc, key) => acc + getNum(mandibula[key]), 0);
 
-  const sum6Max = getNum(maxilar["13"]) + getNum(maxilar["12"]) + getNum(maxilar["11"]) + 
-                  getNum(maxilar["21"]) + getNum(maxilar["22"]) + getNum(maxilar["23"]);
+  const sum6MaxRaw = getNum(maxilar["13"]) + getNum(maxilar["12"]) + getNum(maxilar["11"]) + 
+                     getNum(maxilar["21"]) + getNum(maxilar["22"]) + getNum(maxilar["23"]);
   
-  const sum6Mand = getNum(mandibula["43"]) + getNum(mandibula["42"]) + getNum(mandibula["41"]) + 
-                   getNum(mandibula["31"]) + getNum(mandibula["32"]) + getNum(mandibula["33"]);
+  const sum6MandRaw = getNum(mandibula["43"]) + getNum(mandibula["42"]) + getNum(mandibula["41"]) + 
+                      getNum(mandibula["31"]) + getNum(mandibula["32"]) + getNum(mandibula["33"]);
+
+  const sum12Max = Number(sum12MaxRaw.toFixed(1));
+  const sum12Mand = Number(sum12MandRaw.toFixed(1));
+  const sum6Max = Number(sum6MaxRaw.toFixed(1));
+  const sum6Mand = Number(sum6MandRaw.toFixed(1));
 
   const boltonAnteriorVal = sum6Max > 0 ? (sum6Mand / sum6Max) * 100 : 0;
   const boltonTotalVal = sum12Max > 0 ? (sum12Mand / sum12Max) * 100 : 0;
@@ -204,7 +209,8 @@ export default function OrtodonciaApp() {
   const difTot = boltonTotalVal - 91.2;
   const diagTot = difTot > 0 ? 'Aumentado: Exceso inferior' : 'Disminuido: Exceso superior';
 
-  const sii = getNum(mandibula["42"]) + getNum(mandibula["41"]) + getNum(mandibula["31"]) + getNum(mandibula["32"]); 
+  const siiRaw = getNum(mandibula["42"]) + getNum(mandibula["41"]) + getNum(mandibula["31"]) + getNum(mandibula["32"]); 
+  const sii = Number(siiRaw.toFixed(1));
   const tanakaSup = (sii / 2) + 11; 
   const tanakaInf = (sii / 2) + 10.5;
 
@@ -216,50 +222,6 @@ export default function OrtodonciaApp() {
     tanakaSup: isNaN(tanakaSup) ? "0.0" : tanakaSup.toFixed(1), 
     tanakaInf: isNaN(tanakaInf) ? "0.0" : tanakaInf.toFixed(1)
   };
-
-  const edadRaw = getNum(vertData.edad);
-  const edadCalculo = Math.min(Math.max(edadRaw, 9), 19);
-  const difEdad = edadCalculo - 9;
-
-  const normas = {
-    ejeFacial: { base: 90, varAnual: 0, ds: 3, reverseSign: false },
-    profunFacial: { base: 87, varAnual: 0.3333333333333333, ds: 3, reverseSign: false },
-    anguloPM: { base: 26, varAnual: -0.3, ds: 4, reverseSign: true }, 
-    altFacialInf: { base: 47, varAnual: 0, ds: 4, reverseSign: true }, 
-    arcoMandibular: { base: 26, varAnual: 0.5, ds: 4, reverseSign: false }
-  };
-
-  const variables = ['ejeFacial', 'profunFacial', 'anguloPM', 'altFacialInf', 'arcoMandibular'];
-  let vertSum = 0;
-  const detalles = {};
-
-  variables.forEach(v => {
-    const normaEdad = normas[v].base + (difEdad * normas[v].varAnual);
-    const valPcte = getNum(vertData[v]);
-    
-    let desvio = normas[v].reverseSign 
-      ? (normaEdad - valPcte) / normas[v].ds 
-      : (valPcte - normaEdad) / normas[v].ds;
-
-    if (isNaN(desvio)) desvio = 0;
-
-    detalles[v] = { normaEdad, ds: normas[v].ds, valorSigno: desvio };
-    vertSum += desvio;
-  });
-
-  const vertTotalVal = vertSum / 5;
-  const vertTotal = isNaN(vertTotalVal) ? "0.00" : vertTotalVal.toFixed(2);
-  
-  let biotipo = "";
-  const vt = parseFloat(vertTotal);
-  if (isNaN(vt)) biotipo = "Mesofacial";
-  else if (vt >= 1) biotipo = "Braquifacial Severo";
-  else if (vt >= 0.5) biotipo = "Braquifacial";
-  else if (vt >= -0.5) biotipo = "Mesofacial";
-  else if (vt >= -1.5) biotipo = "Dolicofacial";
-  else biotipo = "Dolicofacial Severo";
-
-  const analisisVert = { edadCalculo, difEdad, detalles, vertTotal, biotipo };
 
   const handleTeethChange = (arch, tooth, value) => {
     const toothKey = String(tooth);
