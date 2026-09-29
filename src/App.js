@@ -38,7 +38,9 @@ const calculateDentario = (maxInputs, mandInputs) => {
   const difAnt = boltonAnteriorVal - 77.2;
   let diagAnt = "";
   let excesoAntMm = 0;
-  if (difAnt > 0.1) {
+  if (sum6Max === 0) {
+    diagAnt = 'Ingrese las medidas de las piezas 13 a 23 y 43 a 33';
+  } else if (difAnt > 0.1) {
     diagAnt = 'Aumentado: Exceso inferior';
     excesoAntMm = sum6Mand - (sum6Max * 0.772);
   } else if (difAnt < -0.1) {
@@ -52,7 +54,9 @@ const calculateDentario = (maxInputs, mandInputs) => {
   const difTot = boltonTotalVal - 91.2;
   let diagTot = "";
   let excesoTotMm = 0;
-  if (difTot > 0.1) {
+  if (sum12Max === 0) {
+    diagTot = 'Ingrese las medidas de todas las piezas';
+  } else if (difTot > 0.1) {
     diagTot = 'Aumentado: Exceso inferior';
     excesoTotMm = sum12Mand - (sum12Max * 0.912);
   } else if (difTot < -0.1) {
@@ -64,8 +68,8 @@ const calculateDentario = (maxInputs, mandInputs) => {
 
   const siiRaw = getNum(mandInputs["42"]) + getNum(mandInputs["41"]) + getNum(mandInputs["31"]) + getNum(mandInputs["32"]); 
   const sii = Number(siiRaw.toFixed(1));
-  const tanakaSup = (sii / 2) + 11; 
-  const tanakaInf = (sii / 2) + 10.5;
+  const tanakaSup = sii > 0 ? ((sii / 2) + 11).toFixed(1) : "0.0"; 
+  const tanakaInf = sii > 0 ? ((sii / 2) + 10.5).toFixed(1) : "0.0";
 
   return {
     sum12Max, sum12Mand, sum6Max, sum6Mand,
@@ -74,8 +78,8 @@ const calculateDentario = (maxInputs, mandInputs) => {
     excesoAntMm: excesoAntMm > 0 ? excesoAntMm.toFixed(1) : "0.0",
     excesoTotMm: excesoTotMm > 0 ? excesoTotMm.toFixed(1) : "0.0",
     sii, 
-    tanakaSup: isNaN(tanakaSup) ? "0.0" : tanakaSup.toFixed(1), 
-    tanakaInf: isNaN(tanakaInf) ? "0.0" : tanakaInf.toFixed(1)
+    tanakaSup, 
+    tanakaInf
   };
 };
 
@@ -136,18 +140,15 @@ const calculateVert = (vData) => {
 };
 
 function TollaroTab({ vertData }) {
-  const [imageSrc, setImageSrc] = useState('https://lh3.googleusercontent.com/d/1AFFQRm-hgrInhR0qINq310luVxI1mxiM');
-  const [imgError, setImgError] = useState(false);
+  const [imageSrc] = useState('https://lh3.googleusercontent.com/d/1AFFQRm-hgrInhR0qINq310luVxI1mxiM');
   const [imgLoaded, setImgLoaded] = useState(false);
   
   const [frameRelY, setFrameRelY] = useState(0.5);
-  // Sincronizar marcadores con datos VERT
   const [markersRelY, setMarkersRelY] = useState([0.5, 0.5, 0.5, 0.5, 0.5]);
 
   const imageRef = useRef(null);
   const [draggingIdx, setDraggingIdx] = useState(null);
 
-  // Escuchadores globales para el Drag
   useEffect(() => {
     const handlePointerMove = (e) => {
       if (draggingIdx === null || !imageRef.current) return;
@@ -265,7 +266,6 @@ function TollaroTab({ vertData }) {
 }
 
 export default function OrtodonciaApp() {
-  // Estados iniciales sin valores para producción
   const [maxilar, setMaxilar] = useState({
     "16": "", "15": "", "14": "", "13": "", "12": "", "11": "",
     "21": "", "22": "", "23": "", "24": "", "25": "", "26": ""
@@ -281,42 +281,43 @@ export default function OrtodonciaApp() {
   });
 
   const [activeTab, setActiveTab] = useState('bolton');
-  const [calcKey, setCalcKey] = useState(0);
   const [showCalculatedMsg, setShowCalculatedMsg] = useState(false);
+  const [modelosKey, setModelosKey] = useState(0);
 
-  // Estado dedicado para Bolton/Tanaka.
-  // Se actualiza usando siempre el objeto que contiene el valor recién escrito.
-  const [analisisDentario, setAnalisisDentario] = useState(
-    () => calculateDentario(maxilar, mandibula)
-  );
+  const [analisisDentario, setAnalisisDentario] = useState(() => calculateDentario(maxilar, mandibula));
+  const [analisisVert, setAnalisisVert] = useState(() => calculateVert(vertData));
+
+  useEffect(() => {
+    setAnalisisDentario(calculateDentario(maxilar, mandibula));
+  }, [maxilar, mandibula]);
+
+  useEffect(() => {
+    setAnalisisVert(calculateVert(vertData));
+  }, [vertData]);
+
+  const forceRefreshModelos = () => {
+    const resultadoCalculado = calculateDentario(maxilar, mandibula);
+    setAnalisisDentario({ ...resultadoCalculado });
+    setModelosKey(prev => prev + 1);
+  };
 
   const handleManualCalculate = () => {
-    // Recalcular explícitamente con los valores actuales.
-    setAnalisisDentario(calculateDentario(maxilar, mandibula));
-    setCalcKey(prev => prev + 1);
+    forceRefreshModelos();
     setShowCalculatedMsg(true);
     setTimeout(() => setShowCalculatedMsg(false), 2500);
   };
 
-  const analisisVert = calculateVert(vertData);
+  const handleTabModelos = () => {
+    forceRefreshModelos();
+    setActiveTab('bolton');
+  };
 
   const handleTeethChange = (arch, tooth, value) => {
     const toothKey = String(tooth);
-
     if (arch === 'max') {
-      setMaxilar(prev => {
-        const next = { ...prev, [toothKey]: value };
-        // Importante: calcular con 'next', que ya contiene el valor recién ingresado.
-        setAnalisisDentario(calculateDentario(next, mandibula));
-        return next;
-      });
+      setMaxilar(prev => ({ ...prev, [toothKey]: value }));
     } else {
-      setMandibula(prev => {
-        const next = { ...prev, [toothKey]: value };
-        // Importante: calcular con 'next', que ya contiene el valor recién ingresado.
-        setAnalisisDentario(calculateDentario(maxilar, next));
-        return next;
-      });
+      setMandibula(prev => ({ ...prev, [toothKey]: value }));
     }
   };
 
@@ -345,7 +346,7 @@ export default function OrtodonciaApp() {
           <div className="flex flex-wrap justify-center gap-2">
             <button 
               type="button"
-              onClick={() => setActiveTab('bolton')} 
+              onClick={handleTabModelos} 
               className={`px-3 md:px-4 py-2 rounded-lg font-medium text-sm md:text-base transition-colors ${activeTab === 'bolton' ? 'bg-indigo-500 text-white shadow-md' : 'bg-indigo-950/50 text-indigo-300 hover:bg-indigo-800'}`}
             >
               Modelos
@@ -367,9 +368,9 @@ export default function OrtodonciaApp() {
           </div>
         </div>
 
-        {/* Tab: Modelos (Bolton y Tanaka) */}
+        {}
         {activeTab === 'bolton' && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <div key={modelosKey} className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             
             <div className="lg:col-span-8 space-y-6">
               <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-200">
@@ -380,12 +381,12 @@ export default function OrtodonciaApp() {
                   </div>
                   <button
                     type="button"
-                    onClick={() => setActiveTab('bolton')} 
-                    //className={`px-3 md:px-4 py-2 rounded-lg font-medium text-sm md:text-base transition-colors ${activeTab === 'bolton' ? 'bg-indigo-500 text-white shadow-md' : 'bg-indigo-950/50 text-indigo-300 hover:bg-indigo-800'}`}
+                    onClick={handleManualCalculate}
                     className="flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-semibold rounded-xl shadow-md transition-all active:scale-95 text-sm"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                   
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
                     Calcular / Refrescar
                   </button>
                 </div>
@@ -443,6 +444,7 @@ export default function OrtodonciaApp() {
               </div>
             </div>
 
+            {}
             <div className="lg:col-span-4 space-y-6">
               <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 border-t-4 border-t-indigo-500">
                 <h3 className="text-lg font-bold text-slate-800 mb-4 border-b pb-2">Análisis de Bolton</h3>
@@ -468,7 +470,7 @@ export default function OrtodonciaApp() {
                     <p className="text-xs text-slate-400 mt-1">Norma: 91,2% | Sumas: M= {analisisDentario.sum12Max} m= {analisisDentario.sum12Mand}</p>
                     <div className={`mt-2 p-2 rounded text-sm flex flex-col font-medium ${parseFloat(analisisDentario.boltonTotal) > 91.2 ? 'bg-rose-50 text-rose-700' : parseFloat(analisisDentario.boltonTotal) > 0 ? 'bg-sky-50 text-sky-700' : 'bg-slate-100 text-slate-500'}`}>
                       <span>{analisisDentario.diagTot}</span>
-                      {analisisDentario.diagTot !== 'Normal' && analisisDentario.excesoTotMm !== "0,0" && (
+                      {analisisDentario.diagTot !== 'Normal' && analisisDentario.excesoTotMm !== "0.0" && (
                         <span className="font-bold">Magnitud: {analisisDentario.excesoTotMm} mm</span>
                       )}
                     </div>
@@ -497,7 +499,7 @@ export default function OrtodonciaApp() {
           </div>
         )}
 
-        {/* Tab: VERT */}
+        {}
         {activeTab === 'vert' && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             
