@@ -38,9 +38,7 @@ const calculateDentario = (maxInputs, mandInputs) => {
   const difAnt = boltonAnteriorVal - 77.2;
   let diagAnt = "";
   let excesoAntMm = 0;
-  if (sum6Max === 0) {
-    diagAnt = 'Ingrese las medidas de las piezas 13 a 23 y 43 a 33';
-  } else if (difAnt > 0.1) {
+  if (difAnt > 0.1) {
     diagAnt = 'Aumentado: Exceso inferior';
     excesoAntMm = sum6Mand - (sum6Max * 0.772);
   } else if (difAnt < -0.1) {
@@ -54,9 +52,7 @@ const calculateDentario = (maxInputs, mandInputs) => {
   const difTot = boltonTotalVal - 91.2;
   let diagTot = "";
   let excesoTotMm = 0;
-  if (sum12Max === 0) {
-    diagTot = 'Ingrese las medidas de todas las piezas';
-  } else if (difTot > 0.1) {
+  if (difTot > 0.1) {
     diagTot = 'Aumentado: Exceso inferior';
     excesoTotMm = sum12Mand - (sum12Max * 0.912);
   } else if (difTot < -0.1) {
@@ -68,8 +64,8 @@ const calculateDentario = (maxInputs, mandInputs) => {
 
   const siiRaw = getNum(mandInputs["42"]) + getNum(mandInputs["41"]) + getNum(mandInputs["31"]) + getNum(mandInputs["32"]); 
   const sii = Number(siiRaw.toFixed(1));
-  const tanakaSup = sii > 0 ? ((sii / 2) + 11).toFixed(1) : "0.0"; 
-  const tanakaInf = sii > 0 ? ((sii / 2) + 10.5).toFixed(1) : "0.0";
+  const tanakaSup = (sii / 2) + 11; 
+  const tanakaInf = (sii / 2) + 10.5;
 
   return {
     sum12Max, sum12Mand, sum6Max, sum6Mand,
@@ -78,8 +74,8 @@ const calculateDentario = (maxInputs, mandInputs) => {
     excesoAntMm: excesoAntMm > 0 ? excesoAntMm.toFixed(1) : "0.0",
     excesoTotMm: excesoTotMm > 0 ? excesoTotMm.toFixed(1) : "0.0",
     sii, 
-    tanakaSup, 
-    tanakaInf
+    tanakaSup: isNaN(tanakaSup) ? "0.0" : tanakaSup.toFixed(1), 
+    tanakaInf: isNaN(tanakaInf) ? "0.0" : tanakaInf.toFixed(1)
   };
 };
 
@@ -285,35 +281,42 @@ export default function OrtodonciaApp() {
   });
 
   const [activeTab, setActiveTab] = useState('bolton');
+  const [calcKey, setCalcKey] = useState(0);
   const [showCalculatedMsg, setShowCalculatedMsg] = useState(false);
 
-  // Estados explícitos para guardar las métricas calculadas
-  const [analisisDentario, setAnalisisDentario] = useState(() => calculateDentario(maxilar, mandibula));
-  const [analisisVert, setAnalisisVert] = useState(() => calculateVert(vertData));
+  // Estado dedicado para Bolton/Tanaka.
+  // Se actualiza usando siempre el objeto que contiene el valor recién escrito.
+  const [analisisDentario, setAnalisisDentario] = useState(
+    () => calculateDentario(maxilar, mandibula)
+  );
 
-  // Recalcular en tiempo real al ingresar o editar datos
-  useEffect(() => {
-    setAnalisisDentario(calculateDentario(maxilar, mandibula));
-  }, [maxilar, mandibula]);
-
-  useEffect(() => {
-    setAnalisisVert(calculateVert(vertData));
-  }, [vertData]);
-
-  // Manejador del botón manual para forzar refresco inmediato del estado en UI
   const handleManualCalculate = () => {
-    const resultadoCalculado = calculateDentario(maxilar, mandibula);
-    setAnalisisDentario({ ...resultadoCalculado });
+    // Recalcular explícitamente con los valores actuales.
+    setAnalisisDentario(calculateDentario(maxilar, mandibula));
+    setCalcKey(prev => prev + 1);
     setShowCalculatedMsg(true);
     setTimeout(() => setShowCalculatedMsg(false), 2500);
   };
 
+  const analisisVert = calculateVert(vertData);
+
   const handleTeethChange = (arch, tooth, value) => {
     const toothKey = String(tooth);
+
     if (arch === 'max') {
-      setMaxilar(prev => ({ ...prev, [toothKey]: value }));
+      setMaxilar(prev => {
+        const next = { ...prev, [toothKey]: value };
+        // Importante: calcular con 'next', que ya contiene el valor recién ingresado.
+        setAnalisisDentario(calculateDentario(next, mandibula));
+        return next;
+      });
     } else {
-      setMandibula(prev => ({ ...prev, [toothKey]: value }));
+      setMandibula(prev => {
+        const next = { ...prev, [toothKey]: value };
+        // Importante: calcular con 'next', que ya contiene el valor recién ingresado.
+        setAnalisisDentario(calculateDentario(maxilar, next));
+        return next;
+      });
     }
   };
 
