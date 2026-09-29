@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 
-// Tooth quadrant keys for 12 maxillary and 12 mandibular teeth
+// Tooth keys for 12 maxillary and 12 mandibular teeth in FDI notation
 const TEETH_MAX_KEYS = ["16", "15", "14", "13", "12", "11", "21", "22", "23", "24", "25", "26"];
 const TEETH_MAND_KEYS = ["46", "45", "44", "43", "42", "41", "31", "32", "33", "34", "35", "36"];
 
@@ -42,6 +42,32 @@ const calculateDentario = (maxInputs, mandInputs) => {
   const difTot = boltonTotalVal - 91.2;
   const diagTot = boltonTotalVal === 0 ? 'Sin datos suficientes' : difTot > 0 ? 'Aumentado: Exceso inferior' : 'Disminuido: Exceso superior';
 
+  // Exact millimeter excess calculations
+  let excesoAntMM = 0;
+  let excesoAntTipo = '';
+  if (boltonAnteriorVal > 0 && sum6Max > 0) {
+    if (boltonAnteriorVal > 77.2) {
+      excesoAntMM = Number((sum6Mand - (sum6Max * 0.772)).toFixed(1));
+      excesoAntTipo = 'Exceso Mandibular';
+    } else if (boltonAnteriorVal < 77.2) {
+      excesoAntMM = Number((sum6Max - (sum6Mand / 0.772)).toFixed(1));
+      excesoAntTipo = 'Exceso Maxilar';
+    }
+  }
+
+  let excesoTotMM = 0;
+  let excesoTotTipo = '';
+  if (boltonTotalVal > 0 && sum12Max > 0) {
+    if (boltonTotalVal > 91.2) {
+      excesoTotMM = Number((sum12Mand - (sum12Max * 0.912)).toFixed(1));
+      excesoTotTipo = 'Exceso Mandibular';
+    } else if (boltonTotalVal < 91.2) {
+      excesoTotMM = Number((sum12Max - (sum12Mand / 0.912)).toFixed(1));
+      excesoTotTipo = 'Exceso Maxilar';
+    }
+  }
+
+  // Tanaka-Johnston Space Analysis
   const siiRaw = getNum(mandInputs["42"]) + getNum(mandInputs["41"]) + getNum(mandInputs["31"]) + getNum(mandInputs["32"]); 
   const sii = Number(siiRaw.toFixed(1));
   const tanakaSup = (sii / 2) + 11; 
@@ -51,6 +77,8 @@ const calculateDentario = (maxInputs, mandInputs) => {
     sum12Max, sum12Mand, sum6Max, sum6Mand,
     boltonAnterior, boltonTotal,
     diagAnt, diagTot,
+    excesoAntMM, excesoAntTipo,
+    excesoTotMM, excesoTotTipo,
     sii, 
     tanakaSup: isNaN(tanakaSup) ? "0.0" : tanakaSup.toFixed(1), 
     tanakaInf: isNaN(tanakaInf) ? "0.0" : tanakaInf.toFixed(1)
@@ -156,8 +184,10 @@ function TollaroTab({ vertData }) {
     ];
 
     const newRelY = factorNorms.map(({ key, min, max }) => {
-      const val = getNum(vertData[key]);
-      if (!val) return 0.5;
+      const raw = vertData[key];
+      if (raw === undefined || raw === null || String(raw).trim() === '') return 0.5;
+      const val = getNum(raw);
+      if (val === 0) return 0.5;
       const pct = (val - min) / (max - min);
       return Math.max(0.05, Math.min(0.95, 1 - pct));
     });
@@ -165,41 +195,42 @@ function TollaroTab({ vertData }) {
     setMarkersRelY(newRelY);
   }, [vertData]);
 
+  useEffect(() => {
+    if (draggingTarget === null) return;
+
+    const handleWindowPointerMove = (e) => {
+      if (!containerRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      let relY = (e.clientY - rect.top) / rect.height;
+      relY = Math.max(0.05, Math.min(0.95, relY));
+
+      if (draggingTarget === 'frame') {
+        setFrameRelY(relY);
+      } else if (typeof draggingTarget === 'number') {
+        setMarkersRelY((prev) => {
+          const next = [...prev];
+          next[draggingTarget] = relY;
+          return next;
+        });
+      }
+    };
+
+    const handleWindowPointerUp = () => {
+      setDraggingTarget(null);
+    };
+
+    window.addEventListener('pointermove', handleWindowPointerMove);
+    window.addEventListener('pointerup', handleWindowPointerUp);
+    return () => {
+      window.removeEventListener('pointermove', handleWindowPointerMove);
+      window.removeEventListener('pointerup', handleWindowPointerUp);
+    };
+  }, [draggingTarget]);
+
   const handlePointerDown = (e, target) => {
     e.preventDefault();
     e.stopPropagation();
-    try {
-      e.currentTarget.setPointerCapture(e.pointerId);
-    } catch (err) {
-      // Fallback if capture is unsupported
-    }
     setDraggingTarget(target);
-  };
-
-  const handlePointerMove = (e) => {
-    if (draggingTarget === null || !containerRef.current) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    let relY = (e.clientY - rect.top) / rect.height;
-    relY = Math.max(0.02, Math.min(0.98, relY));
-
-    if (draggingTarget === 'frame') {
-      setFrameRelY(relY);
-    } else if (typeof draggingTarget === 'number') {
-      setMarkersRelY((prev) => {
-        const next = [...prev];
-        next[draggingTarget] = relY;
-        return next;
-      });
-    }
-  };
-
-  const handlePointerUp = (e) => {
-    try {
-      if (e.currentTarget.hasPointerCapture(e.pointerId)) {
-        e.currentTarget.releasePointerCapture(e.pointerId);
-      }
-    } catch (err) {}
-    setDraggingTarget(null);
   };
 
   const handleFileUpload = (e) => {
@@ -263,8 +294,6 @@ function TollaroTab({ vertData }) {
       <div
         ref={containerRef}
         className="relative w-full min-h-[500px] h-[60vh] max-h-[650px] bg-slate-900 select-none touch-none overflow-hidden flex justify-center items-center p-4"
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
       >
         {useCustomImage && imageSrc ? (
           <img
@@ -371,19 +400,30 @@ export default function OrtodonciaApp() {
 
   const [activeTab, setActiveTab] = useState('bolton');
 
-  // Los resultados dentarios se derivan directamente de los valores actuales.
-  // Esto evita mantener un segundo estado que pueda quedar desactualizado
-  // en producción.
-  const analisisDentario = calculateDentario(maxilar, mandibula);
+  const [analisisDentario, setAnalisisDentario] = useState(() => calculateDentario(initialMaxilar, initialMandibula));
   const [analisisVert, setAnalisisVert] = useState(() => calculateVert(initialVertData));
 
-  // VERT se mantiene separado porque su botón de cálculo es independiente.
+  useEffect(() => {
+    setAnalisisDentario(calculateDentario(maxilar, mandibula));
+  }, [maxilar, mandibula]);
+
   useEffect(() => {
     setAnalisisVert(calculateVert(vertData));
   }, [vertData]);
 
+  const handleCalcularDentario = (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    setAnalisisDentario(calculateDentario(maxilar, mandibula));
+  };
+
   const handleCalcularVert = (e) => {
-    if (e) e.preventDefault();
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     setAnalisisVert(calculateVert(vertData));
   };
 
@@ -443,68 +483,92 @@ export default function OrtodonciaApp() {
           </div>
         </div>
 
-        {/* PESTAÑA MODELOS (Bolton y Tanaka) */}
         {}
         {activeTab === 'bolton' && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            
+            {/* Formulario de Entrada de Dientes */}
             <div className="lg:col-span-8 bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-xl font-bold text-slate-800">Medidas Dentarias (mm)</h2>
-                <div className="px-3 py-2 bg-emerald-50 text-emerald-700 font-semibold rounded-lg text-xs border border-emerald-100">
-                  ✓ Cálculo automático
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6">
+                <div>
+                  <h2 className="text-xl font-bold text-slate-800">Medidas Dentarias (mm)</h2>
+                  <p className="text-xs text-slate-500">Ingresa el ancho mesiodistal de cada pieza dentaria.</p>
                 </div>
+                <button
+                  type="button"
+                  onClick={handleCalcularDentario}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-bold text-sm rounded-xl shadow transition-all flex items-center gap-1.5"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                  </svg>
+                  Calcular Modelos
+                </button>
               </div>
 
-              {/* Maxilar */}
-              <div className="mb-8 overflow-x-auto pb-2 custom-scrollbar">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="font-semibold text-indigo-900 bg-indigo-50 px-2 py-1 rounded">Maxilar</span>
-                </div>
-                <div className="flex justify-between gap-1 min-w-max">
+              {/* Arcada Maxilar (Superior) */}
+              <div className="mb-6 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                <h3 className="text-sm font-bold text-indigo-900 mb-3 uppercase tracking-wider flex items-center gap-2">
+                  <span>Arcada Superior (Maxilar)</span>
+                </h3>
+                <div className="grid grid-cols-6 sm:grid-cols-12 gap-2">
                   {TEETH_MAX_KEYS.map((tooth) => (
-                    <div key={tooth} className="flex flex-col items-center">
-                      <label className="text-xs text-slate-400 mb-1">{tooth}</label>
-                      <input 
+                    <div key={`max-${tooth}`} className="text-center">
+                      <label className="block text-[11px] font-bold text-slate-500 mb-1">{tooth}</label>
+                      <input
                         type="text"
                         inputMode="decimal"
-                        value={maxilar[tooth] ?? ''} 
+                        value={maxilar[tooth] ?? ''}
                         onChange={(e) => handleTeethChange('max', tooth, e.target.value)}
-                        className={`w-12 h-12 text-center rounded border-2 font-semibold focus:border-indigo-500 focus:ring-0 transition-colors
-                          ${["13","12","11","21","22","23"].includes(tooth) ? 'bg-blue-50 border-blue-200 text-blue-900' : 'bg-slate-50 border-slate-200 text-slate-700'}`}
+                        className="w-full p-1.5 text-center text-sm font-bold rounded border border-slate-300 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-slate-800 bg-white"
                       />
                     </div>
                   ))}
                 </div>
               </div>
 
-              {/* Mandíbula */}
-              <div className="overflow-x-auto pb-2 custom-scrollbar">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="font-semibold text-emerald-900 bg-emerald-50 px-2 py-1 rounded">Mandíbula</span>
-                </div>
-                <div className="flex justify-between gap-1 min-w-max">
+              {/* Arcada Mandibular (Inferior) */}
+              <div className="mb-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                <h3 className="text-sm font-bold text-indigo-900 mb-3 uppercase tracking-wider flex items-center gap-2">
+                  <span>Arcada Inferior (Mandíbula)</span>
+                </h3>
+                <div className="grid grid-cols-6 sm:grid-cols-12 gap-2">
                   {TEETH_MAND_KEYS.map((tooth) => (
-                    <div key={tooth} className="flex flex-col items-center">
-                      <input 
+                    <div key={`mand-${tooth}`} className="text-center">
+                      <label className="block text-[11px] font-bold text-slate-500 mb-1">{tooth}</label>
+                      <input
                         type="text"
                         inputMode="decimal"
-                        value={mandibula[tooth] ?? ''} 
+                        value={mandibula[tooth] ?? ''}
                         onChange={(e) => handleTeethChange('mand', tooth, e.target.value)}
-                        className={`w-12 h-12 text-center rounded border-2 font-semibold focus:border-indigo-500 focus:ring-0 transition-colors
-                          ${["43","42","41","31","32","33"].includes(tooth) ? 'bg-blue-50 border-blue-200 text-blue-900' : 'bg-slate-50 border-slate-200 text-slate-700'}`}
+                        className="w-full p-1.5 text-center text-sm font-bold rounded border border-slate-300 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-slate-800 bg-white"
                       />
-                      <label className="text-xs text-slate-400 mt-1">{tooth}</label>
                     </div>
                   ))}
                 </div>
+              </div>
+
+              <div className="mt-6 pt-4 border-t border-slate-100 flex justify-end">
+                <button
+                  type="button"
+                  onClick={handleCalcularDentario}
+                  className="w-full sm:w-auto px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-bold text-sm rounded-xl shadow-md transition-all flex items-center justify-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                  </svg>
+                  Calcular Bolton y Tanaka
+                </button>
               </div>
             </div>
 
-            {/* Panel lateral con Resultados */}
+            {}
             <div className="lg:col-span-4 space-y-6">
+              
               {/* Resultados Bolton */}
               <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 border-t-4 border-t-indigo-500">
                 <h3 className="text-lg font-bold text-slate-800 mb-4 border-b pb-2">Análisis de Bolton</h3>
+                
                 <div className="space-y-4">
                   <div>
                     <div className="flex justify-between items-end">
@@ -512,46 +576,59 @@ export default function OrtodonciaApp() {
                       <p className="text-2xl font-black text-indigo-600">{analisisDentario.boltonAnterior} %</p>
                     </div>
                     <p className="text-xs text-slate-400 mt-1">Norma: 77,2% | Sumas: M= {analisisDentario.sum6Max} m= {analisisDentario.sum6Mand}</p>
-                    <div className={`mt-2 p-2 rounded text-sm font-medium ${parseFloat(analisisDentario.boltonAnterior) > 77.2 ? 'bg-rose-50 text-rose-700' : 'bg-sky-50 text-sky-700'}`}>
+                    <div className={`mt-2 p-2 rounded text-xs font-medium ${parseFloat(analisisDentario.boltonAnterior) > 77.2 ? 'bg-rose-50 text-rose-700' : 'bg-sky-50 text-sky-700'}`}>
                       {analisisDentario.diagAnt}
                     </div>
+                    {analisisDentario.excesoAntMM > 0 && (
+                      <p className="text-xs font-bold mt-1.5 text-slate-700 flex justify-between bg-slate-100 p-1.5 rounded">
+                        <span>Discrepancia:</span>
+                        <span className="text-indigo-700 font-mono font-extrabold">{analisisDentario.excesoAntMM} mm ({analisisDentario.excesoAntTipo})</span>
+                      </p>
+                    )}
                   </div>
+
                   <div className="pt-4 border-t border-slate-100">
                     <div className="flex justify-between items-end">
                       <p className="text-sm font-medium text-slate-500">Total (12 a 12)</p>
                       <p className="text-2xl font-black text-indigo-600">{analisisDentario.boltonTotal} %</p>
                     </div>
                     <p className="text-xs text-slate-400 mt-1">Norma: 91,2% | Sumas: M= {analisisDentario.sum12Max} m= {analisisDentario.sum12Mand}</p>
-                    <div className={`mt-2 p-2 rounded text-sm font-medium ${parseFloat(analisisDentario.boltonTotal) > 91.2 ? 'bg-rose-50 text-rose-700' : 'bg-sky-50 text-sky-700'}`}>
+                    <div className={`mt-2 p-2 rounded text-xs font-medium ${parseFloat(analisisDentario.boltonTotal) > 91.2 ? 'bg-rose-50 text-rose-700' : 'bg-sky-50 text-sky-700'}`}>
                       {analisisDentario.diagTot}
                     </div>
+                    {analisisDentario.excesoTotMM > 0 && (
+                      <p className="text-xs font-bold mt-1.5 text-slate-700 flex justify-between bg-slate-100 p-1.5 rounded">
+                        <span>Discrepancia:</span>
+                        <span className="text-indigo-700 font-mono font-extrabold">{analisisDentario.excesoTotMM} mm ({analisisDentario.excesoTotTipo})</span>
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
 
-              {/* Resultados Tanaka */}
+              {/* Resultados Tanaka-Johnston */}
               <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 border-t-4 border-t-emerald-500">
-                <h3 className="text-lg font-bold text-slate-800 mb-4 border-b pb-2">Tanaka-Johnston</h3>
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center bg-slate-50 p-2 rounded">
-                    <span className="text-sm font-medium text-slate-600">SII (4 incisivos inf.)</span>
-                    <span className="font-bold text-slate-800">{analisisDentario.sii} mm</span>
+                <h3 className="text-lg font-bold text-slate-800 mb-3 border-b pb-2">Tanaka-Johnston</h3>
+                <div className="space-y-3 text-sm">
+                  <div className="flex justify-between items-center bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                    <span className="text-slate-600 font-medium">S.I.I. (4 incisivos inf.):</span>
+                    <span className="font-bold font-mono text-slate-800 text-base">{analisisDentario.sii} mm</span>
                   </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-slate-600">Espacio Nec. Sup</span>
-                    <span className="font-bold text-emerald-600">{analisisDentario.tanakaSup} mm</span>
+                  <div className="flex justify-between items-center p-2 rounded-lg">
+                    <span className="text-slate-600">Espacio Req. Maxilar (Cuadrante):</span>
+                    <span className="font-bold font-mono text-emerald-700">{analisisDentario.tanakaSup} mm</span>
                   </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-slate-600">Espacio Nec. Inf</span>
-                    <span className="font-bold text-emerald-600">{analisisDentario.tanakaInf} mm</span>
+                  <div className="flex justify-between items-center p-2 rounded-lg">
+                    <span className="text-slate-600">Espacio Req. Mandibular (Cuadrante):</span>
+                    <span className="font-bold font-mono text-emerald-700">{analisisDentario.tanakaInf} mm</span>
                   </div>
                 </div>
               </div>
+
             </div>
           </div>
         )}
 
-        {/* PESTAÑA VERT */}
         {}
         {activeTab === 'vert' && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -568,7 +645,7 @@ export default function OrtodonciaApp() {
                       inputMode="numeric"
                       value={vertData.edad ?? ''}
                       onChange={(e) => handleVertChange('edad', e.target.value)}
-                      className="w-full p-2 rounded border border-orange-200 focus:ring-orange-500 font-bold text-slate-800"
+                      className="w-full p-2 rounded border border-orange-200 focus:ring-orange-500 font-bold text-slate-800 bg-white"
                     />
                   </div>
 
@@ -580,7 +657,7 @@ export default function OrtodonciaApp() {
                         inputMode="decimal"
                         value={vertData[key] ?? ''}
                         onChange={(e) => handleVertChange(key, e.target.value)}
-                        className="w-24 p-2 rounded border border-slate-300 text-center font-bold text-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                        className="w-24 p-2 rounded border border-slate-300 text-center font-bold text-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 bg-white"
                       />
                     </div>
                   ))}
@@ -600,6 +677,7 @@ export default function OrtodonciaApp() {
               </button>
             </div>
 
+            {}
             <div className="lg:col-span-8 flex flex-col gap-6">
               <div className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-200 flex flex-col items-center text-center">
                 <p className="text-slate-500 font-medium mb-2">Índice VERT (Ricketts)</p>
@@ -665,7 +743,6 @@ export default function OrtodonciaApp() {
           </div>
         )}
 
-        {/* PESTAÑA TOLLARO */}
         {}
         {activeTab === 'tollaro' && <TollaroTab vertData={vertData} />}
 
