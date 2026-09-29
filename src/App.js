@@ -302,7 +302,7 @@ export default function OrtodonciaApp() {
     ejeFacial: "Eje Facial",
     profunFacial: "Profun. Facial",
     anguloPM: "Ángulo del PM",
-    altFacialInf: "Alt. Facial Inf.",
+    altFacialInf: "Altura Facial Inferior",
     arcoMandibular: "Arco Mandibular"
   };
 
